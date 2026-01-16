@@ -9,7 +9,17 @@ export const loadData = (): AppData => {
   try {
     const parsed = JSON.parse(raw) as AppData;
     if (!parsed.schemaVersion || parsed.schemaVersion !== schemaVersion) {
-      return { ...seedData, ...parsed, schemaVersion };
+      const migrated: AppData = { ...seedData, ...parsed, schemaVersion };
+      if (!parsed.schemaVersion || parsed.schemaVersion < 2) {
+        migrated.logs.foodDays = (parsed.logs?.foodDays ?? []).map(day => ({
+          ...day,
+          entries: day.entries.map(entry => ({
+            ...entry,
+            meal: entry.meal ?? 'snack'
+          }))
+        }));
+      }
+      return migrated;
     }
     return parsed;
   } catch {

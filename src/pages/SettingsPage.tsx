@@ -1,11 +1,9 @@
-import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { calcFoodEntry } from '../utils/nutrition';
 import { seedData } from '../data/seed';
 
 const SettingsPage = () => {
   const { data, setData } = useAppStore();
-  const [units, setUnits] = useState<'metric' | 'imperial'>('metric');
 
   const exportJson = () => {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -102,26 +100,8 @@ const SettingsPage = () => {
     <section className="space-y-4">
       <header className="space-y-2">
         <h1 className="text-2xl font-bold">Настройки</h1>
-        <p className="text-sm text-slate-500">Тема, единицы, экспорт и импорт данных.</p>
+        <p className="text-sm text-slate-500">Экспорт, импорт и сброс данных.</p>
       </header>
-
-      <div className="card p-4 space-y-3">
-        <h2 className="section-title">Единицы</h2>
-        <div className="flex gap-2">
-          <button
-            className={`btn-secondary ${units === 'metric' ? 'border border-slate-900' : ''}`}
-            onClick={() => setUnits('metric')}
-          >
-            кг/см
-          </button>
-          <button
-            className={`btn-secondary ${units === 'imperial' ? 'border border-slate-900' : ''}`}
-            onClick={() => setUnits('imperial')}
-          >
-            lb/in
-          </button>
-        </div>
-      </div>
 
       <div className="card p-4 space-y-3">
         <h2 className="section-title">Экспорт / импорт</h2>
