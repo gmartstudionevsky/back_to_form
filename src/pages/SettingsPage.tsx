@@ -1,0 +1,148 @@
+import { useState } from 'react';
+import { useAppStore } from '../store/useAppStore';
+import { calcFoodEntry } from '../utils/nutrition';
+import { seedData } from '../data/seed';
+
+const SettingsPage = () => {
+  const { data, setData } = useAppStore();
+  const [units, setUnits] = useState<'metric' | 'imperial'>('metric');
+
+  const exportJson = () => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'btf-export.json';
+    anchor.click();
+  };
+
+  const importJson = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    setData(parsed);
+    event.target.value = '';
+  };
+
+  const exportCsv = () => {
+    const dates = new Set<string>();
+    data.logs.foodDays.forEach(day => dates.add(day.date));
+    data.logs.activity.forEach(log => dates.add(log.dateTime.slice(0, 10)));
+    data.logs.smoking.forEach(log => dates.add(log.dateTime.slice(0, 10)));
+    data.logs.weight.forEach(log => dates.add(log.dateTime.slice(0, 10)));
+    data.logs.waist.forEach(log => dates.add(log.date));
+
+    const rows = Array.from(dates)
+      .sort()
+      .map(date => {
+        const foodDay = data.logs.foodDays.find(item => item.date === date);
+        const totals =
+          foodDay?.entries.reduce(
+            (acc, entry) => {
+              const macro = calcFoodEntry(entry, data.library);
+              return {
+                kcal: acc.kcal + macro.kcal,
+                protein: acc.protein + macro.protein,
+                fat: acc.fat + macro.fat,
+                carb: acc.carb + macro.carb
+              };
+            },
+            { kcal: 0, protein: 0, fat: 0, carb: 0 }
+          ) ?? { kcal: 0, protein: 0, fat: 0, carb: 0 };
+
+        const activityMinutes = data.logs.activity
+          .filter(item => item.dateTime.slice(0, 10) === date)
+          .reduce((sum, item) => sum + item.minutes, 0);
+        const cigarettes = data.logs.smoking
+          .filter(item => item.dateTime.slice(0, 10) === date)
+          .reduce((sum, item) => sum + item.count, 0);
+        const weight = data.logs.weight
+          .filter(item => item.dateTime.slice(0, 10) === date)
+          .slice(-1)[0]?.weightKg ?? '';
+        const waist = data.logs.waist.filter(item => item.date === date).slice(-1)[0]?.waistCm ?? '';
+        const tasks = data.planner.dayPlans.find(plan => plan.date === date);
+        const doneRatio = tasks
+          ? `${tasks.tasks.filter(task => task.status === 'done').length}/${tasks.tasks.length}`
+          : '';
+
+        return [
+          date,
+          Math.round(totals.kcal),
+          totals.protein.toFixed(1),
+          totals.fat.toFixed(1),
+          totals.carb.toFixed(1),
+          activityMinutes,
+          cigarettes,
+          weight,
+          waist,
+          doneRatio,
+          foodDay?.notes ?? ''
+        ].join(',');
+      });
+
+    const header =
+      'date,calories,protein,fat,carb,movement_minutes,cigarettes,weight,waist,task_done_ratio,notes';
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'btf-summary.csv';
+    anchor.click();
+  };
+
+  const resetData = () => {
+    if (!confirm('Сбросить все данные?')) return;
+    setData(seedData);
+    window.location.reload();
+  };
+
+  return (
+    <section className="space-y-4">
+      <header className="space-y-2">
+        <h1 className="text-2xl font-bold">Настройки</h1>
+        <p className="text-sm text-slate-500">Тема, единицы, экспорт и импорт данных.</p>
+      </header>
+
+      <div className="card p-4 space-y-3">
+        <h2 className="section-title">Единицы</h2>
+        <div className="flex gap-2">
+          <button
+            className={`btn-secondary ${units === 'metric' ? 'border border-slate-900' : ''}`}
+            onClick={() => setUnits('metric')}
+          >
+            кг/см
+          </button>
+          <button
+            className={`btn-secondary ${units === 'imperial' ? 'border border-slate-900' : ''}`}
+            onClick={() => setUnits('imperial')}
+          >
+            lb/in
+          </button>
+        </div>
+      </div>
+
+      <div className="card p-4 space-y-3">
+        <h2 className="section-title">Экспорт / импорт</h2>
+        <button className="btn-primary" onClick={exportJson}>
+          Экспорт JSON
+        </button>
+        <input type="file" accept="application/json" className="input" onChange={importJson} />
+        <button className="btn-secondary" onClick={exportCsv}>
+          Экспорт CSV summary
+        </button>
+        <p className="text-xs text-slate-500">Фото в JSON не включаются.</p>
+      </div>
+
+      <div className="card p-4">
+        <h2 className="section-title">Сброс</h2>
+        <button className="btn-secondary mt-3" onClick={resetData}>
+          Сбросить все данные
+        </button>
+      </div>
+    </section>
+  );
+};
+
+export default SettingsPage;
