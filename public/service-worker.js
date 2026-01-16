@@ -1,11 +1,13 @@
 const CACHE_NAME = 'btf-cache-v1';
-const CORE_ASSETS = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
+const CORE_ASSETS = ['.', 'index.html', 'manifest.webmanifest', 'icon.svg'];
+
+const buildAssetUrl = asset => new URL(asset, self.registration.scope).toString();
 
 self.addEventListener('install', event => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then(cache => cache.addAll(CORE_ASSETS))
+      .then(cache => cache.addAll(CORE_ASSETS.map(buildAssetUrl)))
       .then(() => self.skipWaiting())
   );
 });

@@ -22,11 +22,10 @@ npm run preview
 ```
 
 ## Деплой на GitHub Pages
-1. В `vite.config.ts` используется `base: '/back_to_form/'`.
-2. Сборка и публикация:
-```bash
-npm run deploy
-```
+В репозитории есть workflow `.github/workflows/deploy.yml`, который собирает Vite‑приложение и публикует содержимое `dist`.
+
+1. Проверьте, что в `vite.config.ts` корректный `base` (по умолчанию `'/back_to_form/'`).
+2. Пуш в `main` автоматически запускает build + deploy через GitHub Actions.
 
 > Если репозиторий называется иначе, задайте `VITE_BASE_PATH` при сборке:
 ```bash
