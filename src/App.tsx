@@ -7,16 +7,18 @@ import LibraryPage from './pages/LibraryPage';
 import ProgressPage from './pages/ProgressPage';
 import PhotosPage from './pages/PhotosPage';
 import SettingsPage from './pages/SettingsPage';
+import MorePage from './pages/MorePage';
 
 const App = () => {
   return (
-    <div className="min-h-screen bg-slate-50 pb-24">
-      <div className="mx-auto max-w-4xl px-4 pt-6">
+    <div className="min-h-screen bg-slate-50 pb-28">
+      <div className="mx-auto max-w-md px-4 pt-5">
         <Routes>
           <Route path="/" element={<TodayPage />} />
           <Route path="/plan" element={<PlanPage />} />
           <Route path="/track" element={<TrackPage />} />
           <Route path="/library" element={<LibraryPage />} />
+          <Route path="/more" element={<MorePage />} />
           <Route path="/progress" element={<ProgressPage />} />
           <Route path="/photos" element={<PhotosPage />} />
           <Route path="/settings" element={<SettingsPage />} />

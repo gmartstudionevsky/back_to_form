@@ -1,6 +1,6 @@
 import { AppData } from '../types';
 
-export const schemaVersion = 1;
+export const schemaVersion = 2;
 
 export const seedData: AppData = {
   schemaVersion,

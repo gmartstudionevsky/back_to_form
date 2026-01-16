@@ -80,6 +80,7 @@ export type TaskInstance = {
   assignedRefs?: { kind: 'protocol' | 'exercise' | 'recipe' | 'rule' | 'product'; refId: UUID }[];
   target?: Record<string, number | string>;
   actual?: Record<string, number | string>;
+  timeOfDay?: 'morning' | 'day' | 'evening';
   notes?: string;
 };
 
@@ -94,11 +95,13 @@ export type DayPlan = {
 export type FoodEntry = {
   id: UUID;
   time?: string;
+  meal: 'breakfast' | 'lunch' | 'dinner' | 'snack';
   kind: 'product' | 'recipe' | 'free';
   refId?: UUID;
   grams?: number;
   servings?: number;
   kcalOverride?: number;
+  title?: string;
   notes?: string;
 };
 
