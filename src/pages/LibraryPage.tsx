@@ -1,16 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BottomSheet } from '../components/BottomSheet';
 import { useAppStore } from '../store/useAppStore';
 import { todayISO } from '../utils/date';
 import { calcRecipeNutrition } from '../utils/nutrition';
-import { FoodEntry, Recipe, TaskTemplate } from '../types';
+import { savePhotoBlob } from '../storage/photoDb';
+import { Exercise, FoodEntry, Recipe, TaskTemplate } from '../types';
 
-const tabs = ['Упражнения', 'Протоколы', 'Продукты', 'Рецепты', 'Шаблоны', 'Правила'] as const;
+const tabs = ['Упражнения', 'Протоколы', 'Продукты', 'Блюда', 'Шаблоны', 'Правила'] as const;
 
 type LibraryTab = (typeof tabs)[number];
 
 type FoodSheetItem = {
-  kind: 'product' | 'recipe';
+  kind: 'product' | 'dish';
   refId: string;
 };
 
@@ -28,13 +29,44 @@ const LibraryPage = () => {
   const [detailItem, setDetailItem] = useState<unknown | null>(null);
   const [foodSheet, setFoodSheet] = useState<FoodSheetItem | null>(null);
   const [taskSheet, setTaskSheet] = useState<TaskTemplate | null>(null);
+  const [createSheet, setCreateSheet] = useState<'dish' | 'product' | 'exercise' | null>(null);
+  const [exerciseMedia, setExerciseMedia] = useState({
+    youtubeUrl: '',
+    file: null as File | null
+  });
   const [foodForm, setFoodForm] = useState({
     meal: 'breakfast' as FoodEntry['meal'],
     grams: 120,
     servings: 1,
     time: ''
   });
+  const [newDish, setNewDish] = useState({
+    name: '',
+    servings: 1,
+    category: 'main' as Recipe['category']
+  });
+  const [newProduct, setNewProduct] = useState({
+    name: '',
+    kcalPer100g: 0,
+    proteinPer100g: 0,
+    fatPer100g: 0,
+    carbPer100g: 0
+  });
+  const [newExercise, setNewExercise] = useState({
+    name: '',
+    tags: '',
+    steps: ''
+  });
   const [taskDate, setTaskDate] = useState(todayISO());
+
+  useEffect(() => {
+    if (!detailItem || !('cues' in (detailItem as Exercise))) return;
+    const exercise = detailItem as Exercise;
+    setExerciseMedia({
+      youtubeUrl: exercise.media?.youtubeUrl ?? '',
+      file: null
+    });
+  }, [detailItem]);
 
   const filtered = useMemo(() => {
     const normalize = (value: string) => value.toLowerCase();
@@ -47,7 +79,7 @@ const LibraryPage = () => {
         return data.library.protocols.filter(item => match(item.name));
       case 'Продукты':
         return data.library.products.filter(item => match(item.name));
-      case 'Рецепты':
+      case 'Блюда':
         return data.library.recipes.filter(item => match(item.name));
       case 'Шаблоны':
         return data.library.taskTemplates.filter(item => match(item.title));
@@ -68,6 +100,7 @@ const LibraryPage = () => {
     updateData(state => {
       const dayPlan = state.planner.dayPlans.find(plan => plan.date === date);
       if (!dayPlan) return { ...state };
+      dayPlan.tasks ??= [];
       dayPlan.tasks.push({
         id: crypto.randomUUID(),
         templateRef: template.id,
@@ -89,13 +122,24 @@ const LibraryPage = () => {
   return (
     <section className="space-y-4">
       <header className="space-y-2">
-        <h1 className="text-2xl font-bold">Library</h1>
+        <h1 className="text-2xl font-bold">Библиотека</h1>
         <input
           className="input"
           placeholder="Поиск"
           value={query}
           onChange={event => setQuery(event.target.value)}
         />
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-secondary" onClick={() => setCreateSheet('dish')}>
+            + Новое блюдо
+          </button>
+          <button className="btn-secondary" onClick={() => setCreateSheet('product')}>
+            + Новый продукт
+          </button>
+          <button className="btn-secondary" onClick={() => setCreateSheet('exercise')}>
+            + Новое упражнение
+          </button>
+        </div>
         <div className="flex gap-2 overflow-x-auto">
           {tabs.map(tab => (
             <button
@@ -122,6 +166,11 @@ const LibraryPage = () => {
                 {'kcalPer100g' in item ? (
                   <p className="text-sm text-slate-500">{(item as any).kcalPer100g} ккал/100г</p>
                 ) : null}
+                {'category' in item ? (
+                  <p className="text-xs text-slate-500">
+                    Категория: {(item as Recipe).category}
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-wrap gap-2">
                 <button className="btn-secondary" onClick={() => setDetailItem(item)}>
@@ -135,10 +184,10 @@ const LibraryPage = () => {
                     Добавить в питание
                   </button>
                 ) : null}
-                {active === 'Рецепты' ? (
+                {active === 'Блюда' ? (
                   <button
                     className="btn-primary"
-                    onClick={() => openFoodSheet({ kind: 'recipe', refId: (item as any).id })}
+                    onClick={() => openFoodSheet({ kind: 'dish', refId: (item as any).id })}
                   >
                     Добавить в питание
                   </button>
@@ -158,7 +207,7 @@ const LibraryPage = () => {
         {detailItem && 'steps' in (detailItem as any) && 'cues' in (detailItem as any) ? (
           <div className="space-y-4 text-sm text-slate-600">
             <div>
-              <p className="text-xs font-semibold uppercase text-slate-400">Steps</p>
+              <p className="text-xs font-semibold uppercase text-slate-400">Шаги</p>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {(detailItem as any).steps.map((step: string, index: number) => (
                   <li key={index}>{step}</li>
@@ -166,7 +215,7 @@ const LibraryPage = () => {
               </ul>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase text-slate-400">Cues</p>
+              <p className="text-xs font-semibold uppercase text-slate-400">Подсказки</p>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {(detailItem as any).cues.map((step: string, index: number) => (
                   <li key={index}>{step}</li>
@@ -174,7 +223,7 @@ const LibraryPage = () => {
               </ul>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase text-slate-400">Mistakes</p>
+              <p className="text-xs font-semibold uppercase text-slate-400">Ошибки</p>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {(detailItem as any).mistakes.map((step: string, index: number) => (
                   <li key={index}>{step}</li>
@@ -182,7 +231,7 @@ const LibraryPage = () => {
               </ul>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase text-slate-400">Regressions</p>
+              <p className="text-xs font-semibold uppercase text-slate-400">Упрощения</p>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {(detailItem as any).regressions.map((step: string, index: number) => (
                   <li key={index}>{step}</li>
@@ -190,13 +239,62 @@ const LibraryPage = () => {
               </ul>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase text-slate-400">Progressions</p>
+              <p className="text-xs font-semibold uppercase text-slate-400">Усложнения</p>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {(detailItem as any).progressions.map((step: string, index: number) => (
                   <li key={index}>{step}</li>
                 ))}
               </ul>
             </div>
+            {'media' in (detailItem as Exercise) ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase text-slate-400">Видео</p>
+                <input
+                  className="input"
+                  placeholder="YouTube ссылка"
+                  value={exerciseMedia.youtubeUrl}
+                  onChange={event =>
+                    setExerciseMedia(prev => ({ ...prev, youtubeUrl: event.target.value }))
+                  }
+                />
+                <input
+                  type="file"
+                  accept="video/*"
+                  className="input"
+                  onChange={event =>
+                    setExerciseMedia(prev => ({ ...prev, file: event.target.files?.[0] ?? null }))
+                  }
+                />
+                <button
+                  className="btn-secondary"
+                  onClick={async () => {
+                    const exercise = detailItem as Exercise;
+                    let blobKey = exercise.media?.localVideoBlobKey;
+                    if (exerciseMedia.file) {
+                      blobKey = crypto.randomUUID();
+                      await savePhotoBlob(blobKey, exerciseMedia.file);
+                    }
+                    updateData(state => {
+                      state.library.exercises = state.library.exercises.map(item =>
+                        item.id === exercise.id
+                          ? {
+                              ...item,
+                              media: {
+                                youtubeUrl: exerciseMedia.youtubeUrl || undefined,
+                                localVideoBlobKey: blobKey
+                              }
+                            }
+                          : item
+                      );
+                      return { ...state };
+                    });
+                    setExerciseMedia({ youtubeUrl: '', file: null });
+                  }}
+                >
+                  Сохранить медиа
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -224,7 +322,7 @@ const LibraryPage = () => {
         {detailItem && 'ingredients' in (detailItem as any) ? (
           <div className="space-y-3 text-sm text-slate-600">
             <div>
-              <p className="text-xs font-semibold uppercase text-slate-400">Ingredients</p>
+              <p className="text-xs font-semibold uppercase text-slate-400">Состав</p>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {(detailItem as Recipe).ingredients.map(ingredient => {
                   const product = data.library.products.find(
@@ -239,7 +337,7 @@ const LibraryPage = () => {
               </ul>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase text-slate-400">Steps</p>
+              <p className="text-xs font-semibold uppercase text-slate-400">Шаги</p>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {(detailItem as Recipe).steps.map((step, index) => (
                   <li key={index}>{step}</li>
@@ -247,7 +345,7 @@ const LibraryPage = () => {
               </ul>
             </div>
             <div className="rounded-xl bg-slate-50 p-3">
-              <p className="text-xs uppercase text-slate-400">Nutrition per serving</p>
+              <p className="text-xs uppercase text-slate-400">Нутриенты на порцию</p>
               <p className="text-sm">
                 {(() => {
                   const nutrition = calcRecipeNutrition(detailItem as Recipe, data.library);
@@ -265,7 +363,7 @@ const LibraryPage = () => {
             <p>Калории: {(detailItem as any).kcalPer100g} ккал/100г</p>
             {((detailItem as any).portionPresets ?? []).length > 0 ? (
               <div>
-                <p className="text-xs font-semibold uppercase text-slate-400">Presets</p>
+              <p className="text-xs font-semibold uppercase text-slate-400">Шаблоны</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {(detailItem as any).portionPresets.map((preset: any) => (
                     <span key={preset.label} className="badge">
@@ -344,7 +442,7 @@ const LibraryPage = () => {
                   kind: foodSheet.kind,
                   refId: foodSheet.refId,
                   grams: foodSheet.kind === 'product' ? foodForm.grams : undefined,
-                  servings: foodSheet.kind === 'recipe' ? foodForm.servings : undefined,
+                  servings: foodSheet.kind === 'dish' ? foodForm.servings : undefined,
                   meal: foodForm.meal,
                   time: foodForm.time || undefined
                 });
@@ -382,6 +480,204 @@ const LibraryPage = () => {
             </button>
           </>
         )}
+      </BottomSheet>
+
+      <BottomSheet
+        open={Boolean(createSheet)}
+        title={
+          createSheet === 'dish'
+            ? 'Новое блюдо'
+            : createSheet === 'product'
+            ? 'Новый продукт'
+            : 'Новое упражнение'
+        }
+        onClose={() => setCreateSheet(null)}
+      >
+        {createSheet === 'dish' ? (
+          <div className="space-y-3">
+            <input
+              className="input"
+              placeholder="Название"
+              value={newDish.name}
+              onChange={event => setNewDish(prev => ({ ...prev, name: event.target.value }))}
+            />
+            <input
+              className="input"
+              type="number"
+              placeholder="Порции"
+              value={newDish.servings}
+              onChange={event =>
+                setNewDish(prev => ({ ...prev, servings: Number(event.target.value) }))
+              }
+            />
+            <select
+              className="input"
+              value={newDish.category}
+              onChange={event =>
+                setNewDish(prev => ({ ...prev, category: event.target.value as Recipe['category'] }))
+              }
+            >
+              <option value="breakfast">Завтрак</option>
+              <option value="main">Основное</option>
+              <option value="side">Гарнир</option>
+              <option value="salad">Салат</option>
+              <option value="snack">Перекус</option>
+              <option value="dessert">Десерт</option>
+              <option value="drink">Напиток</option>
+              <option value="cheat">Читмил</option>
+            </select>
+            <button
+              className="btn-primary"
+              onClick={() => {
+                if (!newDish.name) return;
+                updateData(state => {
+                  state.library.recipes.push({
+                    id: crypto.randomUUID(),
+                    name: newDish.name,
+                    servings: newDish.servings || 1,
+                    ingredients: [],
+                    steps: [],
+                    tags: [],
+                    category: newDish.category
+                  });
+                  return { ...state };
+                });
+                setNewDish({ name: '', servings: 1, category: 'main' });
+                setCreateSheet(null);
+              }}
+            >
+              Создать блюдо
+            </button>
+          </div>
+        ) : null}
+
+        {createSheet === 'product' ? (
+          <div className="space-y-3">
+            <input
+              className="input"
+              placeholder="Название"
+              value={newProduct.name}
+              onChange={event => setNewProduct(prev => ({ ...prev, name: event.target.value }))}
+            />
+            <input
+              className="input"
+              type="number"
+              placeholder="Ккал на 100 г"
+              value={newProduct.kcalPer100g}
+              onChange={event =>
+                setNewProduct(prev => ({ ...prev, kcalPer100g: Number(event.target.value) }))
+              }
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                className="input"
+                type="number"
+                placeholder="Белки"
+                value={newProduct.proteinPer100g}
+                onChange={event =>
+                  setNewProduct(prev => ({ ...prev, proteinPer100g: Number(event.target.value) }))
+                }
+              />
+              <input
+                className="input"
+                type="number"
+                placeholder="Жиры"
+                value={newProduct.fatPer100g}
+                onChange={event =>
+                  setNewProduct(prev => ({ ...prev, fatPer100g: Number(event.target.value) }))
+                }
+              />
+            </div>
+            <input
+              className="input"
+              type="number"
+              placeholder="Углеводы"
+              value={newProduct.carbPer100g}
+              onChange={event =>
+                setNewProduct(prev => ({ ...prev, carbPer100g: Number(event.target.value) }))
+              }
+            />
+            <button
+              className="btn-primary"
+              onClick={() => {
+                if (!newProduct.name) return;
+                updateData(state => {
+                  state.library.products.push({
+                    id: crypto.randomUUID(),
+                    name: newProduct.name,
+                    kcalPer100g: newProduct.kcalPer100g,
+                    proteinPer100g: newProduct.proteinPer100g || undefined,
+                    fatPer100g: newProduct.fatPer100g || undefined,
+                    carbPer100g: newProduct.carbPer100g || undefined
+                  });
+                  return { ...state };
+                });
+                setNewProduct({
+                  name: '',
+                  kcalPer100g: 0,
+                  proteinPer100g: 0,
+                  fatPer100g: 0,
+                  carbPer100g: 0
+                });
+                setCreateSheet(null);
+              }}
+            >
+              Создать продукт
+            </button>
+          </div>
+        ) : null}
+
+        {createSheet === 'exercise' ? (
+          <div className="space-y-3">
+            <input
+              className="input"
+              placeholder="Название"
+              value={newExercise.name}
+              onChange={event => setNewExercise(prev => ({ ...prev, name: event.target.value }))}
+            />
+            <input
+              className="input"
+              placeholder="Теги через запятую"
+              value={newExercise.tags}
+              onChange={event => setNewExercise(prev => ({ ...prev, tags: event.target.value }))}
+            />
+            <textarea
+              className="input min-h-[80px]"
+              placeholder="Шаги упражнения"
+              value={newExercise.steps}
+              onChange={event => setNewExercise(prev => ({ ...prev, steps: event.target.value }))}
+            />
+            <button
+              className="btn-primary"
+              onClick={() => {
+                if (!newExercise.name) return;
+                updateData(state => {
+                  state.library.exercises.push({
+                    id: crypto.randomUUID(),
+                    name: newExercise.name,
+                    tags: newExercise.tags
+                      .split(',')
+                      .map(tag => tag.trim())
+                      .filter(Boolean),
+                    steps: newExercise.steps
+                      .split('\\n')
+                      .map(step => step.trim())
+                      .filter(Boolean),
+                    cues: [],
+                    mistakes: [],
+                    regressions: [],
+                    progressions: []
+                  });
+                  return { ...state };
+                });
+                setNewExercise({ name: '', tags: '', steps: '' });
+                setCreateSheet(null);
+              }}
+            >
+              Создать упражнение
+            </button>
+          </div>
+        ) : null}
       </BottomSheet>
     </section>
   );

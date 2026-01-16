@@ -45,7 +45,7 @@ export const calcFoodEntry = (entry: FoodEntry, library: LibraryState) => {
     if (!product) return { kcal: 0, protein: 0, fat: 0, carb: 0 };
     return macroForProduct(product, entry.grams);
   }
-  if (entry.kind === 'recipe' && entry.refId) {
+  if (entry.kind === 'dish' && entry.refId) {
     const recipe = library.recipes.find(item => item.id === entry.refId);
     if (!recipe) return { kcal: 0, protein: 0, fat: 0, carb: 0 };
     const nutrition = calcRecipeNutrition(recipe, library);

@@ -2,15 +2,15 @@ import { NavLink } from 'react-router-dom';
 
 const MorePage = () => {
   const links = [
-    { path: '/progress', label: 'Progress' },
-    { path: '/photos', label: 'Photos' },
-    { path: '/settings', label: 'Settings' }
+    { path: '/progress', label: 'Прогресс' },
+    { path: '/photos', label: 'Фото' },
+    { path: '/settings', label: 'Настройки' }
   ];
 
   return (
     <section className="space-y-4">
       <header className="space-y-2">
-        <h1 className="text-2xl font-bold">More</h1>
+        <h1 className="text-2xl font-bold">Ещё</h1>
         <p className="text-sm text-slate-500">Дополнительные разделы и настройки.</p>
       </header>
 

@@ -59,9 +59,10 @@ const SettingsPage = () => {
           .filter(item => item.dateTime.slice(0, 10) === date)
           .slice(-1)[0]?.weightKg ?? '';
         const waist = data.logs.waist.filter(item => item.date === date).slice(-1)[0]?.waistCm ?? '';
-        const tasks = data.planner.dayPlans.find(plan => plan.date === date);
-        const doneRatio = tasks
-          ? `${tasks.tasks.filter(task => task.status === 'done').length}/${tasks.tasks.length}`
+        const plan = data.planner.dayPlans.find(plan => plan.date === date);
+        const plannedMeals = plan?.mealsPlan ? Object.values(plan.mealsPlan).flat() : [];
+        const doneRatio = plannedMeals.length
+          ? `${plannedMeals.filter(item => item.completed).length}/${plannedMeals.length}`
           : '';
 
         return [
@@ -80,7 +81,7 @@ const SettingsPage = () => {
       });
 
     const header =
-      'date,calories,protein,fat,carb,movement_minutes,cigarettes,weight,waist,task_done_ratio,notes';
+      'date,calories,protein,fat,carb,movement_minutes,cigarettes,weight,waist,plan_done_ratio,notes';
     const csv = [header, ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);

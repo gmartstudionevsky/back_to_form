@@ -19,6 +19,35 @@ export const loadData = (): AppData => {
           }))
         }));
       }
+      if (!parsed.schemaVersion || parsed.schemaVersion < 3) {
+        migrated.library.recipes = (parsed.library?.recipes ?? []).map(recipe => ({
+          ...recipe,
+          category: recipe.category ?? 'main'
+        }));
+        migrated.logs.foodDays = (parsed.logs?.foodDays ?? []).map(day => ({
+          ...day,
+          entries: day.entries.map(entry => ({
+            ...entry,
+            kind: entry.kind === 'recipe' ? 'dish' : entry.kind,
+            meal: entry.meal ?? 'snack'
+          }))
+        }));
+        migrated.planner.dayPlans = (parsed.planner?.dayPlans ?? []).map(plan => ({
+          ...plan,
+          mealsPlan: plan.mealsPlan ?? {
+            breakfast: [],
+            lunch: [],
+            dinner: [],
+            snack: []
+          },
+          workoutsPlan: plan.workoutsPlan ?? [],
+          requirements: plan.requirements ?? {
+            requireWeight: false,
+            requireWaist: false,
+            requirePhotos: []
+          }
+        }));
+      }
       return migrated;
     }
     return parsed;

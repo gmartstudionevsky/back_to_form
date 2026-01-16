@@ -1,11 +1,11 @@
 import { NavLink } from 'react-router-dom';
 
 const tabs = [
-  { path: '/', label: 'Today' },
-  { path: '/plan', label: 'Plan' },
-  { path: '/track', label: 'Track' },
-  { path: '/library', label: 'Library' },
-  { path: '/more', label: 'More' }
+  { path: '/', label: 'Сегодня' },
+  { path: '/plan', label: 'План' },
+  { path: '/track', label: 'Трекер' },
+  { path: '/library', label: 'Библиотека' },
+  { path: '/more', label: 'Ещё' }
 ];
 
 export const BottomTabs = () => {
