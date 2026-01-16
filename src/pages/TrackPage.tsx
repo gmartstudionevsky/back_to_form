@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import { BottomSheet } from '../components/BottomSheet';
 import { useAppStore } from '../store/useAppStore';
-import { calcFoodEntry } from '../utils/nutrition';
+import { calcFoodEntry, calcRecipeNutrition } from '../utils/nutrition';
 import { todayISO } from '../utils/date';
 import { ActivityLog, FoodEntry, SleepLog, SmokingLog, WaistLog, WeightLog } from '../types';
 
-const tabs = ['Nutrition', 'Activity', 'Smoking', 'Measurements', 'Sleep'] as const;
+const tabs = ['Питание', 'Активность', 'Курение', 'Измерения', 'Сон'] as const;
 
 type Tab = (typeof tabs)[number];
 
@@ -43,7 +43,7 @@ const TrackPage = () => {
     updateSleepLog,
     deleteSleepLog
   } = useAppStore();
-  const [active, setActive] = useState<Tab>('Nutrition');
+  const [active, setActive] = useState<Tab>('Питание');
   const [selectedDate, setSelectedDate] = useState(todayISO());
   const [foodSheet, setFoodSheet] = useState<FoodDraft | null>(null);
   const [foodQuery, setFoodQuery] = useState('');
@@ -53,6 +53,7 @@ const TrackPage = () => {
   const [waistDraft, setWaistDraft] = useState<WaistLog | null>(null);
   const [sleepDraft, setSleepDraft] = useState<SleepLog | null>(null);
 
+  const dayPlan = data.planner.dayPlans.find(plan => plan.date === selectedDate);
   const foodDay = data.logs.foodDays.find(day => day.date === selectedDate);
   const totals = useMemo(() => {
     const entries = foodDay?.entries ?? [];
@@ -69,6 +70,27 @@ const TrackPage = () => {
       { kcal: 0, protein: 0, fat: 0, carb: 0 }
     );
   }, [foodDay, data.library]);
+
+  const plannedMeals = dayPlan?.mealsPlan;
+  const plannedMealItems = plannedMeals ? Object.values(plannedMeals).flat() : [];
+  const plannedKcal = plannedMealItems.reduce((sum, item) => {
+    if (item.kind === 'product' && item.refId && item.plannedGrams) {
+      const product = data.library.products.find(prod => prod.id === item.refId);
+      if (!product) return sum;
+      return sum + (product.kcalPer100g * item.plannedGrams) / 100;
+    }
+    if (item.kind === 'dish' && item.refId) {
+      const dish = data.library.recipes.find(rec => rec.id === item.refId);
+      if (!dish) return sum;
+      const nutrition = calcRecipeNutrition(dish, data.library);
+      return sum + nutrition.perServing.kcal * (item.plannedServings ?? 1);
+    }
+    return sum;
+  }, 0);
+  const plannedDone = plannedMealItems.filter(item => item.completed).length;
+  const plannedCompletion = plannedMealItems.length
+    ? Math.round((plannedDone / plannedMealItems.length) * 100)
+    : 0;
 
   const groupedFood = useMemo(() => {
     const entries = foodDay?.entries ?? [];
@@ -101,13 +123,14 @@ const TrackPage = () => {
       id: '',
       date: selectedDate,
       meal: 'breakfast',
-      kind: 'product',
+      kind: 'dish',
       refId: '',
       grams: 120,
       servings: 1,
       time: '',
       title: '',
-      kcalOverrideText: ''
+      kcalOverrideText: '',
+      cheatCategory: 'pizza'
     });
   };
 
@@ -118,15 +141,16 @@ const TrackPage = () => {
       kind: foodSheet.kind,
       refId: foodSheet.refId || undefined,
       grams: foodSheet.kind === 'product' ? foodSheet.grams : undefined,
-      servings: foodSheet.kind === 'recipe' ? foodSheet.servings : undefined,
+      servings: foodSheet.kind === 'dish' ? foodSheet.servings : undefined,
       meal: foodSheet.meal,
       time: foodSheet.time || undefined,
-      title: foodSheet.kind === 'free' ? foodSheet.title : undefined,
+      title: foodSheet.kind === 'free' || foodSheet.kind === 'cheat' ? foodSheet.title : undefined,
       kcalOverride:
-        foodSheet.kind === 'free' && foodSheet.kcalOverrideText
+        (foodSheet.kind === 'free' || foodSheet.kind === 'cheat') && foodSheet.kcalOverrideText
           ? Number(foodSheet.kcalOverrideText)
           : undefined,
-      notes: foodSheet.notes
+      notes: foodSheet.notes,
+      cheatCategory: foodSheet.kind === 'cheat' ? foodSheet.cheatCategory : undefined
     };
     if (foodSheet.id) {
       updateFoodEntry(foodSheet.date, payload);
@@ -251,14 +275,27 @@ const TrackPage = () => {
   const filteredProducts = data.library.products.filter(product =>
     product.name.toLowerCase().includes(foodQuery.toLowerCase())
   );
-  const filteredRecipes = data.library.recipes.filter(recipe =>
+  const filteredDishes = data.library.recipes.filter(recipe =>
     recipe.name.toLowerCase().includes(foodQuery.toLowerCase())
   );
+
+  const plannedWorkouts = dayPlan?.workoutsPlan ?? [];
+  const plannedWorkoutCount = plannedWorkouts.filter(
+    item => item.kind === 'workout' || item.protocolRef
+  ).length;
+  const plannedMovementMinutes = plannedWorkouts
+    .filter(item => item.kind === 'movement')
+    .reduce((sum, item) => sum + (item.plannedMinutes ?? 0), 0);
+  const completedWorkoutCount = plannedWorkouts.filter(item => item.completed).length;
+  const actualWorkoutCount = activityLogs.filter(log => log.type === 'workout').length;
+  const actualMovementMinutes = activityLogs
+    .filter(log => log.type !== 'workout')
+    .reduce((sum, log) => sum + log.minutes, 0);
 
   return (
     <section className="space-y-4">
       <header className="space-y-2">
-        <h1 className="text-2xl font-bold">Track</h1>
+        <h1 className="text-2xl font-bold">Трекер</h1>
         <div className="flex gap-2 overflow-x-auto">
           {tabs.map(tab => (
             <button
@@ -284,8 +321,17 @@ const TrackPage = () => {
         />
       </div>
 
-      {active === 'Nutrition' && (
+      {active === 'Питание' && (
         <div className="space-y-3">
+          <div className="card p-4">
+            <h2 className="section-title">План vs факт</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              План: {plannedKcal.toFixed(0)} ккал · Факт: {totals.kcal.toFixed(0)} ккал
+            </p>
+            <p className="text-xs text-slate-500">
+              Выполнено: {plannedDone}/{plannedMealItems.length} ({plannedCompletion}%)
+            </p>
+          </div>
           <div className="card p-4">
             <div className="flex items-center justify-between">
               <h2 className="section-title">Итог дня</h2>
@@ -312,9 +358,9 @@ const TrackPage = () => {
                           <p className="text-sm font-semibold">
                             {entry.kind === 'product'
                               ? data.library.products.find(prod => prod.id === entry.refId)?.name
-                              : entry.kind === 'recipe'
+                              : entry.kind === 'dish'
                               ? data.library.recipes.find(rec => rec.id === entry.refId)?.name
-                              : entry.title || 'Свободная запись'}
+                              : entry.title || (entry.kind === 'cheat' ? 'Читмил' : 'Свободная запись')}
                           </p>
                           <p className="text-xs text-slate-500">
                             {entry.time ? `${entry.time} · ` : ''}
@@ -353,7 +399,7 @@ const TrackPage = () => {
         </div>
       )}
 
-      {active === 'Activity' && (
+      {active === 'Активность' && (
         <div className="space-y-3">
           <div className="card p-4">
             <div className="flex items-center justify-between">
@@ -364,6 +410,13 @@ const TrackPage = () => {
                 Добавить
               </button>
             </div>
+            <p className="mt-2 text-sm text-slate-600">
+              План: тренировки {plannedWorkoutCount}, движение {plannedMovementMinutes} мин
+            </p>
+            <p className="text-xs text-slate-500">
+              Факт: тренировки {actualWorkoutCount}, движение {actualMovementMinutes} мин ·
+              Закрыто по плану: {completedWorkoutCount}
+            </p>
           </div>
           <div className="card p-4">
             <h3 className="text-sm font-semibold text-slate-500">Логи</h3>
@@ -397,7 +450,7 @@ const TrackPage = () => {
         </div>
       )}
 
-      {active === 'Smoking' && (
+      {active === 'Курение' && (
         <div className="space-y-3">
           <div className="card p-4">
             <div className="flex items-center justify-between">
@@ -408,6 +461,9 @@ const TrackPage = () => {
                 Добавить
               </button>
             </div>
+            <p className="mt-2 text-sm text-slate-600">
+              Цель: {dayPlan?.requirements?.smokingTargetMax ?? '—'} шт
+            </p>
           </div>
           <div className="card p-4">
             <h3 className="text-sm font-semibold text-slate-500">Логи</h3>
@@ -442,7 +498,7 @@ const TrackPage = () => {
         </div>
       )}
 
-      {active === 'Measurements' && (
+      {active === 'Измерения' && (
         <div className="space-y-3">
           <div className="card p-4">
             <div className="flex items-center justify-between">
@@ -511,7 +567,7 @@ const TrackPage = () => {
         </div>
       )}
 
-      {active === 'Sleep' && (
+      {active === 'Сон' && (
         <div className="space-y-3">
           <div className="card p-4">
             <div className="flex items-center justify-between">
@@ -572,9 +628,10 @@ const TrackPage = () => {
                 )
               }
             >
+              <option value="dish">Блюдо</option>
               <option value="product">Продукт</option>
-              <option value="recipe">Рецепт</option>
               <option value="free">Свободная</option>
+              <option value="cheat">Читмил</option>
             </select>
 
             <label className="text-sm font-semibold text-slate-600">Приём пищи</label>
@@ -604,7 +661,7 @@ const TrackPage = () => {
               }
             />
 
-            {foodSheet.kind !== 'free' && (
+            {foodSheet.kind !== 'free' && foodSheet.kind !== 'cheat' && (
               <>
                 <label className="text-sm font-semibold text-slate-600">Поиск</label>
                 <input
@@ -673,9 +730,9 @@ const TrackPage = () => {
               </>
             )}
 
-            {foodSheet.kind === 'recipe' && (
+            {foodSheet.kind === 'dish' && (
               <>
-                <label className="text-sm font-semibold text-slate-600">Рецепт</label>
+                <label className="text-sm font-semibold text-slate-600">Блюдо</label>
                 <select
                   className="input"
                   value={foodSheet.refId ?? ''}
@@ -683,8 +740,8 @@ const TrackPage = () => {
                     setFoodSheet(prev => (prev ? { ...prev, refId: event.target.value } : prev))
                   }
                 >
-                  <option value="">Выберите рецепт</option>
-                  {filteredRecipes.map(recipe => (
+                  <option value="">Выберите блюдо</option>
+                  {filteredDishes.map(recipe => (
                     <option key={recipe.id} value={recipe.id}>
                       {recipe.name}
                     </option>
@@ -704,7 +761,7 @@ const TrackPage = () => {
               </>
             )}
 
-            {foodSheet.kind === 'free' && (
+            {(foodSheet.kind === 'free' || foodSheet.kind === 'cheat') && (
               <>
                 <label className="text-sm font-semibold text-slate-600">Название</label>
                 <input
@@ -714,6 +771,30 @@ const TrackPage = () => {
                     setFoodSheet(prev => (prev ? { ...prev, title: event.target.value } : prev))
                   }
                 />
+                {foodSheet.kind === 'cheat' ? (
+                  <>
+                    <label className="text-sm font-semibold text-slate-600">Категория читмила</label>
+                    <select
+                      className="input"
+                      value={foodSheet.cheatCategory ?? 'pizza'}
+                      onChange={event =>
+                        setFoodSheet(prev =>
+                          prev
+                            ? {
+                                ...prev,
+                                cheatCategory: event.target.value as FoodEntry['cheatCategory']
+                              }
+                            : prev
+                        )
+                      }
+                    >
+                      <option value="pizza">Пицца</option>
+                      <option value="fastfood">Фастфуд</option>
+                      <option value="sweets">Сладкое</option>
+                      <option value="other">Другое</option>
+                    </select>
+                  </>
+                ) : null}
                 <label className="text-sm font-semibold text-slate-600">Калории</label>
                 <input
                   type="number"

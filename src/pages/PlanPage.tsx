@@ -1,46 +1,53 @@
 import { useMemo, useState } from 'react';
 import { BottomSheet } from '../components/BottomSheet';
 import { useAppStore } from '../store/useAppStore';
-import { DayPlan, Period, TaskInstance } from '../types';
+import { FoodEntry, MealPlanItem, Period, WorkoutPlanItem } from '../types';
+import { calcRecipeNutrition } from '../utils/nutrition';
 
-const timeOptions = [
-  { value: '', label: 'Без времени' },
-  { value: 'morning', label: 'Утро' },
-  { value: 'day', label: 'День' },
-  { value: 'evening', label: 'Вечер' }
-];
+const tabs = ['Периоды', 'Рацион'] as const;
+
+type Tab = (typeof tabs)[number];
+
+type MealDraft = {
+  meal: FoodEntry['meal'];
+  kind: MealPlanItem['kind'];
+  refId?: string;
+  title: string;
+  grams: number;
+  servings: number;
+  cheatCategory: MealPlanItem['cheatCategory'];
+};
+
+type WorkoutDraft = {
+  timeOfDay: WorkoutPlanItem['timeOfDay'];
+  kind: WorkoutPlanItem['kind'];
+  protocolRef: string;
+  plannedMinutes: number;
+  isRequired: boolean;
+};
+
+const mealLabels: Record<FoodEntry['meal'], string> = {
+  breakfast: 'Завтрак',
+  lunch: 'Обед',
+  dinner: 'Ужин',
+  snack: 'Перекус'
+};
 
 const PlanPage = () => {
-  const { data, updateData, createOrGetDayPlan, updateTaskRefsTarget } = useAppStore();
+  const { data, updateData, createOrGetDayPlan } = useAppStore();
+  const [activeTab, setActiveTab] = useState<Tab>('Периоды');
   const [name, setName] = useState('Новый период');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedPeriod, setSelectedPeriod] = useState<Period | null>(null);
   const [editorDate, setEditorDate] = useState<string | null>(null);
-  const [editingTask, setEditingTask] = useState<TaskInstance | null>(null);
-  const [autoFillOpen, setAutoFillOpen] = useState(false);
-  const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
-  const [refKind, setRefKind] = useState<
-    'protocol' | 'exercise' | 'recipe' | 'rule' | 'product'
-  >('protocol');
-  const [refId, setRefId] = useState('');
-
-  const refOptions = useMemo(() => {
-    switch (refKind) {
-      case 'protocol':
-        return data.library.protocols.map(item => ({ id: item.id, label: item.name }));
-      case 'exercise':
-        return data.library.exercises.map(item => ({ id: item.id, label: item.name }));
-      case 'recipe':
-        return data.library.recipes.map(item => ({ id: item.id, label: item.name }));
-      case 'rule':
-        return data.library.rules.map(item => ({ id: item.id, label: item.name }));
-      case 'product':
-        return data.library.products.map(item => ({ id: item.id, label: item.name }));
-      default:
-        return [];
-    }
-  }, [data.library, refKind]);
+  const [mealSheet, setMealSheet] = useState<MealDraft | null>(null);
+  const [workoutSheet, setWorkoutSheet] = useState<WorkoutDraft | null>(null);
+  const [menuCopy, setMenuCopy] = useState({
+    sourceDate: '',
+    startDate: '',
+    endDate: ''
+  });
 
   const addPeriod = () => {
     if (!startDate || !endDate) return;
@@ -80,430 +87,669 @@ const PlanPage = () => {
     ? data.planner.dayPlans.find(plan => plan.date === editorDate)
     : undefined;
 
-  const addTaskToDay = (templateId: string) => {
-    if (!editorDate) return;
-    const template = data.library.taskTemplates.find(item => item.id === templateId);
-    if (!template) return;
+  const plannedKcal = (planDate: string) => {
+    const plan = data.planner.dayPlans.find(item => item.date === planDate);
+    if (!plan?.mealsPlan) return 0;
+    return Object.values(plan.mealsPlan).flat().reduce((sum, item) => {
+      if (item.kind === 'product' && item.refId && item.plannedGrams) {
+        const product = data.library.products.find(prod => prod.id === item.refId);
+        if (!product) return sum;
+        return sum + (product.kcalPer100g * item.plannedGrams) / 100;
+      }
+      if (item.kind === 'dish' && item.refId) {
+        const dish = data.library.recipes.find(rec => rec.id === item.refId);
+        if (!dish) return sum;
+        const nutrition = calcRecipeNutrition(dish, data.library);
+        return sum + nutrition.perServing.kcal * (item.plannedServings ?? 1);
+      }
+      return sum;
+    }, 0);
+  };
+
+  const addMealToPlan = () => {
+    if (!mealSheet || !editorDate) return;
     updateData(state => {
       const plan = state.planner.dayPlans.find(item => item.date === editorDate);
       if (!plan) return { ...state };
-      plan.tasks.push({
+      const entry: MealPlanItem = {
         id: crypto.randomUUID(),
-        templateRef: template.id,
-        status: 'planned',
-        assignedRefs: template.suggestedRefs ?? [],
-        target: template.defaultTarget ?? {}
+        kind: mealSheet.kind,
+        refId:
+          mealSheet.kind === 'product' || mealSheet.kind === 'dish' ? mealSheet.refId : undefined,
+        plannedGrams: mealSheet.kind === 'product' ? mealSheet.grams : undefined,
+        plannedServings: mealSheet.kind === 'dish' ? mealSheet.servings : undefined,
+        title: mealSheet.kind === 'free' || mealSheet.kind === 'cheat' ? mealSheet.title : undefined,
+        cheatCategory: mealSheet.kind === 'cheat' ? mealSheet.cheatCategory : undefined
+      };
+      plan.mealsPlan[mealSheet.meal].push(entry);
+      return { ...state };
+    });
+    setMealSheet(null);
+  };
+
+  const addWorkoutToPlan = () => {
+    if (!workoutSheet || !editorDate) return;
+    updateData(state => {
+      const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+      if (!plan) return { ...state };
+      plan.workoutsPlan.push({
+        id: crypto.randomUUID(),
+        timeOfDay: workoutSheet.timeOfDay,
+        kind: workoutSheet.kind,
+        protocolRef: workoutSheet.protocolRef || undefined,
+        plannedMinutes: workoutSheet.kind === 'movement' ? workoutSheet.plannedMinutes : undefined,
+        isRequired: workoutSheet.isRequired
       });
       return { ...state };
     });
+    setWorkoutSheet(null);
   };
 
-  const moveTask = (taskId: string, direction: 'up' | 'down') => {
-    if (!editorDate) return;
+  const copyMenuRange = () => {
+    if (!menuCopy.sourceDate || !menuCopy.startDate || !menuCopy.endDate) return;
     updateData(state => {
-      const plan = state.planner.dayPlans.find(item => item.date === editorDate);
-      if (!plan) return { ...state };
-      const index = plan.tasks.findIndex(task => task.id === taskId);
-      if (index < 0) return { ...state };
-      const newIndex = direction === 'up' ? index - 1 : index + 1;
-      if (newIndex < 0 || newIndex >= plan.tasks.length) return { ...state };
-      const next = [...plan.tasks];
-      const [moved] = next.splice(index, 1);
-      next.splice(newIndex, 0, moved);
-      plan.tasks = next;
-      return { ...state };
-    });
-  };
-
-  const copyFromPrevDay = () => {
-    if (!editorDate) return;
-    updateData(state => {
-      const current = state.planner.dayPlans.find(item => item.date === editorDate);
-      if (!current) return { ...state };
-      const prevDate = new Date(editorDate);
-      prevDate.setDate(prevDate.getDate() - 1);
-      const prev = state.planner.dayPlans.find(
-        item => item.date === prevDate.toISOString().slice(0, 10)
-      );
-      if (!prev) return { ...state };
-      current.tasks = prev.tasks.map(task => ({
-        ...task,
-        id: crypto.randomUUID(),
-        status: 'planned',
-        actual: undefined
-      }));
-      return { ...state };
-    });
-  };
-
-  const applyAutoFill = () => {
-    if (!selectedPeriod) return;
-    updateData(state => {
-      const start = new Date(selectedPeriod.startDate);
-      const end = new Date(selectedPeriod.endDate);
+      const sourcePlan = state.planner.dayPlans.find(item => item.date === menuCopy.sourceDate);
+      if (!sourcePlan) return { ...state };
+      const start = new Date(menuCopy.startDate);
+      const end = new Date(menuCopy.endDate);
       for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
         const iso = date.toISOString().slice(0, 10);
         let plan = state.planner.dayPlans.find(item => item.date === iso);
         if (!plan) {
-          plan = { id: crypto.randomUUID(), date: iso, periodId: selectedPeriod.id, tasks: [] };
+          plan = {
+            id: crypto.randomUUID(),
+            date: iso,
+            periodId: selectedPeriod?.id,
+            tasks: [],
+            mealsPlan: { breakfast: [], lunch: [], dinner: [], snack: [] },
+            workoutsPlan: [],
+            requirements: { requireWeight: false, requireWaist: false, requirePhotos: [] }
+          };
           state.planner.dayPlans.push(plan);
         }
-        selectedTemplates.forEach(templateId => {
-          const template = state.library.taskTemplates.find(item => item.id === templateId);
-          if (!template) return;
-          plan?.tasks.push({
-            id: crypto.randomUUID(),
-            templateRef: template.id,
-            status: 'planned',
-            assignedRefs: template.suggestedRefs ?? [],
-            target: template.defaultTarget ?? {}
-          });
-        });
+        plan.mealsPlan = JSON.parse(JSON.stringify(sourcePlan.mealsPlan));
       }
       return { ...state };
     });
-    setAutoFillOpen(false);
   };
 
   return (
     <section className="space-y-4">
       <header className="space-y-2">
-        <h1 className="text-2xl font-bold">Plan</h1>
-        <p className="text-sm text-slate-500">
-          Периоды → дни → задачи. Настраивайте цели, ссылки и заметки.
-        </p>
+        <h1 className="text-2xl font-bold">План</h1>
+        <div className="flex gap-2">
+          {tabs.map(tab => (
+            <button
+              key={tab}
+              className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide ${
+                activeTab === tab ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'
+              }`}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
       </header>
 
-      <div className="card p-4 space-y-3">
-        <h2 className="section-title">Создать период</h2>
-        <input
-          className="input"
-          placeholder="Название"
-          value={name}
-          onChange={event => setName(event.target.value)}
-        />
-        <div className="grid grid-cols-2 gap-3">
-          <input
-            className="input"
-            type="date"
-            value={startDate}
-            onChange={event => setStartDate(event.target.value)}
-          />
-          <input
-            className="input"
-            type="date"
-            value={endDate}
-            onChange={event => setEndDate(event.target.value)}
-          />
-        </div>
-        <button className="btn-primary" onClick={addPeriod}>
-          Добавить период
-        </button>
-      </div>
-
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="section-title">Периоды</h2>
-          <button
-            className="btn-secondary"
-            onClick={() => selectedPeriod && setAutoFillOpen(true)}
-            disabled={!selectedPeriod}
-          >
-            Автозаполнение периода
-          </button>
-        </div>
-        {data.planner.periods.map(period => (
-          <div key={period.id} className="card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold">{period.name}</h3>
-                <p className="text-sm text-slate-500">
-                  {period.startDate} → {period.endDate}
-                </p>
-              </div>
-              <button className="btn-secondary" onClick={() => setSelectedPeriod(period)}>
-                Открыть
-              </button>
+      {activeTab === 'Периоды' && (
+        <>
+          <div className="card p-4 space-y-3">
+            <h2 className="section-title">Создать период</h2>
+            <input
+              className="input"
+              placeholder="Название"
+              value={name}
+              onChange={event => setName(event.target.value)}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                className="input"
+                type="date"
+                value={startDate}
+                onChange={event => setStartDate(event.target.value)}
+              />
+              <input
+                className="input"
+                type="date"
+                value={endDate}
+                onChange={event => setEndDate(event.target.value)}
+              />
             </div>
-          </div>
-        ))}
-      </div>
-
-      {selectedPeriod && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="section-title">Дни периода</h2>
-            <button className="btn-secondary" onClick={() => setSelectedPeriod(null)}>
-              Закрыть
+            <button className="btn-primary" onClick={addPeriod}>
+              Добавить период
             </button>
           </div>
-          {dayList.map(date => {
-            const plan = data.planner.dayPlans.find(item => item.date === date);
-            return (
-              <div key={date} className="card p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold">{date}</p>
-                    <p className="text-xs text-slate-500">Задач: {plan?.tasks.length ?? 0}</p>
-                  </div>
-                  <button className="btn-secondary" onClick={() => openDayEditor(date)}>
-                    Редактировать
+
+          <div className="space-y-3">
+            <h2 className="section-title">Периоды</h2>
+            {data.planner.periods.map(period => (
+              <button
+                key={period.id}
+                className={`card flex w-full items-center justify-between p-4 text-left ${
+                  selectedPeriod?.id === period.id ? 'border border-slate-900' : ''
+                }`}
+                onClick={() => setSelectedPeriod(period)}
+              >
+                <div>
+                  <h3 className="text-lg font-semibold">{period.name}</h3>
+                  <p className="text-sm text-slate-500">
+                    {period.startDate} → {period.endDate}
+                  </p>
+                </div>
+                <span className="text-slate-400">Открыть</span>
+              </button>
+            ))}
+          </div>
+
+          {selectedPeriod ? (
+            <div className="card p-4 space-y-3">
+              <h2 className="section-title">Дни периода</h2>
+              <div className="grid grid-cols-2 gap-2">
+                {dayList.map(date => (
+                  <button
+                    key={date}
+                    className={`btn-secondary ${editorDate === date ? 'border border-slate-900' : ''}`}
+                    onClick={() => openDayEditor(date)}
+                  >
+                    {date}
                   </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {dayPlan ? (
+            <div className="card p-4 space-y-4">
+              <h2 className="section-title">Редактор дня · {editorDate}</h2>
+
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold">Требования</h3>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={dayPlan.requirements.requireWeight}
+                      onChange={event =>
+                        updateData(state => {
+                          const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+                          if (!plan) return { ...state };
+                          plan.requirements.requireWeight = event.target.checked;
+                          return { ...state };
+                        })
+                      }
+                    />
+                    Вес
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={dayPlan.requirements.requireWaist}
+                      onChange={event =>
+                        updateData(state => {
+                          const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+                          if (!plan) return { ...state };
+                          plan.requirements.requireWaist = event.target.checked;
+                          return { ...state };
+                        })
+                      }
+                    />
+                    Талия
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={dayPlan.requirements.requirePhotos.includes('front')}
+                      onChange={event =>
+                        updateData(state => {
+                          const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+                          if (!plan) return { ...state };
+                          plan.requirements.requirePhotos = event.target.checked
+                            ? Array.from(new Set([...plan.requirements.requirePhotos, 'front']))
+                            : plan.requirements.requirePhotos.filter(photo => photo !== 'front');
+                          return { ...state };
+                        })
+                      }
+                    />
+                    Фото front
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={dayPlan.requirements.requirePhotos.includes('side')}
+                      onChange={event =>
+                        updateData(state => {
+                          const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+                          if (!plan) return { ...state };
+                          plan.requirements.requirePhotos = event.target.checked
+                            ? Array.from(new Set([...plan.requirements.requirePhotos, 'side']))
+                            : plan.requirements.requirePhotos.filter(photo => photo !== 'side');
+                          return { ...state };
+                        })
+                      }
+                    />
+                    Фото side
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    className="input"
+                    type="number"
+                    placeholder="Лимит сигарет"
+                    value={dayPlan.requirements.smokingTargetMax ?? ''}
+                    onChange={event =>
+                      updateData(state => {
+                        const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+                        if (!plan) return { ...state };
+                        plan.requirements.smokingTargetMax = Number(event.target.value) || undefined;
+                        return { ...state };
+                      })
+                    }
+                  />
+                  <input
+                    className="input"
+                    type="number"
+                    placeholder="Ккал-лимит"
+                    value={dayPlan.requirements.kcalTarget ?? ''}
+                    onChange={event =>
+                      updateData(state => {
+                        const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+                        if (!plan) return { ...state };
+                        plan.requirements.kcalTarget = Number(event.target.value) || undefined;
+                        return { ...state };
+                      })
+                    }
+                  />
                 </div>
               </div>
-            );
-          })}
-        </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">Питание</h3>
+                  <button
+                    className="btn-secondary"
+                    onClick={() =>
+                      setMealSheet({
+                        meal: 'breakfast',
+                        kind: 'dish',
+                        refId: '',
+                        title: '',
+                        grams: 150,
+                        servings: 1,
+                        cheatCategory: 'pizza'
+                      })
+                    }
+                  >
+                    Добавить блюдо/продукт
+                  </button>
+                </div>
+                {(Object.keys(mealLabels) as FoodEntry['meal'][]).map(meal => (
+                  <div key={meal} className="space-y-2">
+                    <p className="text-xs uppercase tracking-wide text-slate-400">{mealLabels[meal]}</p>
+                    {dayPlan.mealsPlan[meal].length === 0 ? (
+                      <p className="text-xs text-slate-500">Нет позиций</p>
+                    ) : (
+                      dayPlan.mealsPlan[meal].map(item => (
+                        <div key={item.id} className="flex items-center justify-between rounded-xl border p-2">
+                          <div className="text-sm">
+                            {item.kind === 'dish'
+                              ? data.library.recipes.find(dish => dish.id === item.refId)?.name
+                              : item.kind === 'product'
+                              ? data.library.products.find(product => product.id === item.refId)?.name
+                              : item.title}
+                          </div>
+                          <button
+                            className="btn-secondary text-red-500"
+                            onClick={() =>
+                              updateData(state => {
+                                const plan = state.planner.dayPlans.find(
+                                  itemPlan => itemPlan.date === editorDate
+                                );
+                                if (!plan) return { ...state };
+                                plan.mealsPlan[meal] = plan.mealsPlan[meal].filter(
+                                  itemPlan => itemPlan.id !== item.id
+                                );
+                                return { ...state };
+                              })
+                            }
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">Тренировки</h3>
+                  <button
+                    className="btn-secondary"
+                    onClick={() =>
+                      setWorkoutSheet({
+                        timeOfDay: 'morning',
+                        kind: 'workout',
+                        protocolRef: '',
+                        plannedMinutes: 10,
+                        isRequired: true
+                      })
+                    }
+                  >
+                    Добавить сессию
+                  </button>
+                </div>
+                {dayPlan.workoutsPlan.length === 0 ? (
+                  <p className="text-xs text-slate-500">Нет тренировок</p>
+                ) : (
+                  dayPlan.workoutsPlan.map(item => (
+                    <div key={item.id} className="flex items-center justify-between rounded-xl border p-2">
+                      <div className="text-sm">
+                        {item.kind === 'movement'
+                          ? `Движение · ${item.plannedMinutes ?? 10} мин`
+                          : data.library.protocols.find(proto => proto.id === item.protocolRef)?.name}
+                      </div>
+                      <button
+                        className="btn-secondary text-red-500"
+                        onClick={() =>
+                          updateData(state => {
+                            const plan = state.planner.dayPlans.find(
+                              itemPlan => itemPlan.date === editorDate
+                            );
+                            if (!plan) return { ...state };
+                            plan.workoutsPlan = plan.workoutsPlan.filter(
+                              itemPlan => itemPlan.id !== item.id
+                            );
+                            return { ...state };
+                          })
+                        }
+                      >
+                        Удалить
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : null}
+        </>
       )}
 
-      <BottomSheet
-        open={Boolean(editorDate)}
-        title={editorDate ? `День ${editorDate}` : 'День'}
-        onClose={() => {
-          setEditorDate(null);
-          setEditingTask(null);
-        }}
-      >
-        {dayPlan ? (
-          <>
+      {activeTab === 'Рацион' && (
+        <div className="space-y-4">
+          <div className="card p-4 space-y-2">
+            <h2 className="section-title">Меню на период</h2>
+            {selectedPeriod ? (
+              <p className="text-sm text-slate-500">
+                {selectedPeriod.name}: {selectedPeriod.startDate} → {selectedPeriod.endDate}
+              </p>
+            ) : (
+              <p className="text-sm text-slate-500">Выберите период в разделе «Периоды».</p>
+            )}
+          </div>
+
+          {selectedPeriod ? (
             <div className="space-y-2">
-              {dayPlan.tasks.map(task => {
-                const template = data.library.taskTemplates.find(item => item.id === task.templateRef);
+              {dayList.map(date => {
+                const plan = data.planner.dayPlans.find(item => item.date === date);
+                if (!plan) return null;
+                const kcal = plannedKcal(date);
                 return (
-                  <div key={task.id} className="rounded-xl border border-slate-200 p-3">
-                    <div className="flex items-start justify-between">
+                  <div key={date} className="card p-4">
+                    <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-semibold">{template?.title ?? 'Задача'}</p>
-                        <p className="text-xs text-slate-500">{template?.type}</p>
+                        <h3 className="text-sm font-semibold">{date}</h3>
+                        <p className="text-xs text-slate-500">План: {kcal.toFixed(0)} ккал</p>
                       </div>
-                      <div className="flex gap-2">
-                        <button className="btn-secondary" onClick={() => moveTask(task.id, 'up')}>
-                          Вверх
-                        </button>
-                        <button className="btn-secondary" onClick={() => moveTask(task.id, 'down')}>
-                          Вниз
-                        </button>
-                        <button className="btn-secondary" onClick={() => setEditingTask(task)}>
-                          Настройки
-                        </button>
-                      </div>
+                      <span className="text-xs text-slate-400">
+                        Лимит: {plan.requirements.kcalTarget ?? '—'}
+                      </span>
                     </div>
                   </div>
                 );
               })}
             </div>
+          ) : null}
 
-            <label className="text-sm font-semibold text-slate-600">Добавить задачу</label>
-            <select className="input" onChange={event => addTaskToDay(event.target.value)}>
-              <option value="">Выберите шаблон</option>
-              {data.library.taskTemplates.map(template => (
-                <option key={template.id} value={template.id}>
-                  {template.title}
-                </option>
-              ))}
-            </select>
-
-            <button className="btn-secondary" onClick={copyFromPrevDay}>
-              Копировать задачи из предыдущего дня
+          <div className="card p-4 space-y-3">
+            <h3 className="text-sm font-semibold">Скопировать меню на диапазон</h3>
+            <input
+              className="input"
+              type="date"
+              value={menuCopy.sourceDate}
+              onChange={event => setMenuCopy(prev => ({ ...prev, sourceDate: event.target.value }))}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                className="input"
+                type="date"
+                value={menuCopy.startDate}
+                onChange={event => setMenuCopy(prev => ({ ...prev, startDate: event.target.value }))}
+              />
+              <input
+                className="input"
+                type="date"
+                value={menuCopy.endDate}
+                onChange={event => setMenuCopy(prev => ({ ...prev, endDate: event.target.value }))}
+              />
+            </div>
+            <button className="btn-secondary" onClick={copyMenuRange}>
+              Скопировать меню
             </button>
-          </>
-        ) : (
-          <p className="text-sm text-slate-500">День не найден.</p>
-        )}
-      </BottomSheet>
+          </div>
+        </div>
+      )}
 
       <BottomSheet
-        open={Boolean(editingTask)}
-        title="Редактировать задачу"
-        onClose={() => setEditingTask(null)}
+        open={Boolean(mealSheet)}
+        title="Добавить в меню"
+        onClose={() => setMealSheet(null)}
       >
-        {editingTask && editorDate && (
-          <>
-            <label className="text-sm font-semibold text-slate-600">Цель (ключ)</label>
-            <input
-              className="input"
-              value={Object.keys(editingTask.target ?? {})[0] ?? ''}
-              onChange={event =>
-                setEditingTask(prev =>
-                  prev
-                    ? {
-                        ...prev,
-                        target: event.target.value
-                          ? { [event.target.value]: Object.values(prev.target ?? {})[0] ?? '' }
-                          : undefined
-                      }
-                    : prev
-                )
-              }
-            />
-            <label className="text-sm font-semibold text-slate-600">Цель (значение)</label>
-            <input
-              className="input"
-              value={Object.values(editingTask.target ?? {})[0] ?? ''}
-              onChange={event =>
-                setEditingTask(prev => {
-                  if (!prev) return prev;
-                  const key = Object.keys(prev.target ?? {})[0] ?? 'value';
-                  return { ...prev, target: { [key]: event.target.value } };
-                })
-              }
-            />
-            <label className="text-sm font-semibold text-slate-600">Заметки</label>
-            <textarea
-              className="input min-h-[80px]"
-              value={editingTask.notes ?? ''}
-              onChange={event =>
-                setEditingTask(prev => (prev ? { ...prev, notes: event.target.value } : prev))
-              }
-            />
-            <label className="text-sm font-semibold text-slate-600">Связанные материалы</label>
-            <div className="space-y-2">
-              {(editingTask.assignedRefs ?? []).length === 0 ? (
-                <p className="text-xs text-slate-500">Нет привязок.</p>
-              ) : (
-                editingTask.assignedRefs?.map((ref, index) => (
-                  <div key={`${ref.kind}-${ref.refId}-${index}`} className="flex items-center gap-2">
-                    <span className="badge">{ref.kind}</span>
-                    <span className="text-xs text-slate-500">{ref.refId}</span>
-                    <button
-                      className="text-xs text-red-500"
-                      onClick={() =>
-                        setEditingTask(prev =>
-                          prev
-                            ? {
-                                ...prev,
-                                assignedRefs: prev.assignedRefs?.filter(
-                                  (_, refIndex) => refIndex !== index
-                                )
-                              }
-                            : prev
-                        )
-                      }
-                    >
-                      Удалить
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <select
-                className="input"
-                value={refKind}
-                onChange={event =>
-                  setRefKind(event.target.value as typeof refKind)
-                }
-              >
-                <option value="protocol">Протокол</option>
-                <option value="exercise">Упражнение</option>
-                <option value="recipe">Рецепт</option>
-                <option value="rule">Правило</option>
-                <option value="product">Продукт</option>
-              </select>
-              <select
-                className="input"
-                value={refId}
-                onChange={event => setRefId(event.target.value)}
-              >
-                <option value="">Выберите</option>
-                {refOptions.map(option => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button
-              className="btn-secondary"
-              onClick={() => {
-                if (!refId) return;
-                setEditingTask(prev =>
-                  prev
-                    ? {
-                        ...prev,
-                        assignedRefs: [
-                          ...(prev.assignedRefs ?? []),
-                          { kind: refKind, refId }
-                        ]
-                      }
-                    : prev
-                );
-                setRefId('');
-              }}
-            >
-              Добавить привязку
-            </button>
-            <label className="text-sm font-semibold text-slate-600">Время дня</label>
+        {mealSheet && (
+          <div className="space-y-3">
+            <label className="text-sm font-semibold text-slate-600">Приём пищи</label>
             <select
               className="input"
-              value={editingTask.timeOfDay ?? ''}
+              value={mealSheet.meal}
               onChange={event =>
-                setEditingTask(prev =>
-                  prev
-                    ? {
-                        ...prev,
-                        timeOfDay: event.target.value
-                          ? (event.target.value as TaskInstance['timeOfDay'])
-                          : undefined
-                      }
-                    : prev
+                setMealSheet(prev =>
+                  prev ? { ...prev, meal: event.target.value as FoodEntry['meal'] } : prev
                 )
               }
             >
-              {timeOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
+              {Object.entries(mealLabels).map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
                 </option>
               ))}
             </select>
-
-            <button
-              className="btn-primary"
-              onClick={() => {
-                updateTaskRefsTarget(editorDate, editingTask.id, {
-                  target: editingTask.target,
-                  notes: editingTask.notes,
-                  timeOfDay: editingTask.timeOfDay,
-                  assignedRefs: editingTask.assignedRefs
-                });
-                setEditingTask(null);
-              }}
+            <label className="text-sm font-semibold text-slate-600">Тип</label>
+            <select
+              className="input"
+              value={mealSheet.kind}
+              onChange={event =>
+                setMealSheet(prev =>
+                  prev ? { ...prev, kind: event.target.value as MealPlanItem['kind'] } : prev
+                )
+              }
             >
-              Сохранить
-            </button>
-          </>
-        )}
-      </BottomSheet>
+              <option value="dish">Блюдо</option>
+              <option value="product">Продукт</option>
+              <option value="free">Свободно</option>
+              <option value="cheat">Читмил</option>
+            </select>
 
-      <BottomSheet
-        open={autoFillOpen}
-        title="Автозаполнение периода"
-        onClose={() => setAutoFillOpen(false)}
-      >
-        <p className="text-sm text-slate-500">
-          Выберите шаблоны, которые будут добавлены в каждый день периода.
-        </p>
-        <div className="space-y-2">
-          {data.library.taskTemplates.map(template => (
-            <label key={template.id} className="flex items-center gap-2 text-sm">
+            {(mealSheet.kind === 'dish' || mealSheet.kind === 'product') && (
+              <>
+                <label className="text-sm font-semibold text-slate-600">Справочник</label>
+                <select
+                  className="input"
+                  value={mealSheet.refId ?? ''}
+                  onChange={event =>
+                    setMealSheet(prev => (prev ? { ...prev, refId: event.target.value } : prev))
+                  }
+                >
+                  <option value="">Выберите</option>
+                  {(mealSheet.kind === 'dish' ? data.library.recipes : data.library.products).map(
+                    item => (
+                      <option key={item.id} value={item.id}>
+                        {'name' in item ? item.name : 'Название'}
+                      </option>
+                    )
+                  )}
+                </select>
+              </>
+            )}
+
+            {mealSheet.kind === 'dish' ? (
               <input
-                type="checkbox"
-                checked={selectedTemplates.includes(template.id)}
+                className="input"
+                type="number"
+                placeholder="Порции"
+                value={mealSheet.servings}
                 onChange={event =>
-                  setSelectedTemplates(prev =>
-                    event.target.checked
-                      ? [...prev, template.id]
-                      : prev.filter(id => id !== template.id)
+                  setMealSheet(prev =>
+                    prev ? { ...prev, servings: Number(event.target.value) } : prev
                   )
                 }
               />
-              <span>{template.title}</span>
+            ) : null}
+
+            {mealSheet.kind === 'product' ? (
+              <input
+                className="input"
+                type="number"
+                placeholder="Граммы"
+                value={mealSheet.grams}
+                onChange={event =>
+                  setMealSheet(prev =>
+                    prev ? { ...prev, grams: Number(event.target.value) } : prev
+                  )
+                }
+              />
+            ) : null}
+
+            {(mealSheet.kind === 'free' || mealSheet.kind === 'cheat') && (
+              <>
+                <input
+                  className="input"
+                  placeholder="Название"
+                  value={mealSheet.title}
+                  onChange={event =>
+                    setMealSheet(prev => (prev ? { ...prev, title: event.target.value } : prev))
+                  }
+                />
+                {mealSheet.kind === 'cheat' ? (
+                  <select
+                    className="input"
+                    value={mealSheet.cheatCategory ?? 'pizza'}
+                    onChange={event =>
+                      setMealSheet(prev =>
+                        prev
+                          ? {
+                              ...prev,
+                              cheatCategory: event.target.value as MealPlanItem['cheatCategory']
+                            }
+                          : prev
+                      )
+                    }
+                  >
+                    <option value="pizza">Пицца</option>
+                    <option value="fastfood">Фастфуд</option>
+                    <option value="sweets">Сладкое</option>
+                    <option value="other">Другое</option>
+                  </select>
+                ) : null}
+              </>
+            )}
+
+            <button className="btn-primary" onClick={addMealToPlan}>
+              Сохранить в план
+            </button>
+          </div>
+        )}
+      </BottomSheet>
+
+      <BottomSheet
+        open={Boolean(workoutSheet)}
+        title="Добавить сессию"
+        onClose={() => setWorkoutSheet(null)}
+      >
+        {workoutSheet && (
+          <div className="space-y-3">
+            <label className="text-sm font-semibold text-slate-600">Время</label>
+            <select
+              className="input"
+              value={workoutSheet.timeOfDay}
+              onChange={event =>
+                setWorkoutSheet(prev =>
+                  prev
+                    ? { ...prev, timeOfDay: event.target.value as WorkoutPlanItem['timeOfDay'] }
+                    : prev
+                )
+              }
+            >
+              <option value="morning">Утро</option>
+              <option value="day">День</option>
+              <option value="evening">Вечер</option>
+            </select>
+            <label className="text-sm font-semibold text-slate-600">Тип</label>
+            <select
+              className="input"
+              value={workoutSheet.kind}
+              onChange={event =>
+                setWorkoutSheet(prev =>
+                  prev ? { ...prev, kind: event.target.value as WorkoutPlanItem['kind'] } : prev
+                )
+              }
+            >
+              <option value="workout">Тренировка</option>
+              <option value="movement">Движение</option>
+            </select>
+            {workoutSheet.kind === 'workout' ? (
+              <select
+                className="input"
+                value={workoutSheet.protocolRef}
+                onChange={event =>
+                  setWorkoutSheet(prev => (prev ? { ...prev, protocolRef: event.target.value } : prev))
+                }
+              >
+                <option value="">Выберите протокол</option>
+                {data.library.protocols.map(protocol => (
+                  <option key={protocol.id} value={protocol.id}>
+                    {protocol.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                className="input"
+                type="number"
+                placeholder="Минуты движения"
+                value={workoutSheet.plannedMinutes}
+                onChange={event =>
+                  setWorkoutSheet(prev =>
+                    prev ? { ...prev, plannedMinutes: Number(event.target.value) } : prev
+                  )
+                }
+              />
+            )}
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={workoutSheet.isRequired}
+                onChange={event =>
+                  setWorkoutSheet(prev => (prev ? { ...prev, isRequired: event.target.checked } : prev))
+                }
+              />
+              Обязательная
             </label>
-          ))}
-        </div>
-        <button className="btn-primary" onClick={applyAutoFill}>
-          Применить
-        </button>
+            <button className="btn-primary" onClick={addWorkoutToPlan}>
+              Сохранить
+            </button>
+          </div>
+        )}
       </BottomSheet>
     </section>
   );

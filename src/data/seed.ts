@@ -1,6 +1,6 @@
 import { AppData } from '../types';
 
-export const schemaVersion = 2;
+export const schemaVersion = 3;
 
 export const seedData: AppData = {
   schemaVersion,
@@ -8,17 +8,17 @@ export const seedData: AppData = {
     exercises: [
       {
         id: 'ex-chin-tuck',
-        name: 'Chin tuck',
+        name: 'Втягивание подбородка',
         tags: ['шея'],
         steps: ['Сядьте ровно.', 'Мягко втяните подбородок назад.', 'Держите 5–10 секунд.'],
         cues: ['Шея длинная', 'Плечи расслаблены'],
         mistakes: ['Поднятые плечи', 'Резкий рывок'],
         regressions: ['Сделать у стены'],
-        progressions: ['Добавить резинку']
+        progressions: ['Добавить лёгкое сопротивление']
       },
       {
         id: 'ex-neck-side-bend',
-        name: 'Neck side bend',
+        name: 'Наклон шеи в сторону',
         tags: ['шея'],
         steps: ['Наклоните голову к плечу.', 'Держите 15–20 секунд.'],
         cues: ['Плечи вниз'],
@@ -28,7 +28,7 @@ export const seedData: AppData = {
       },
       {
         id: 'ex-open-book',
-        name: 'Open book thoracic rotation',
+        name: 'Поворот грудного отдела «Книга»',
         tags: ['грудной отдел'],
         steps: ['Лягте на бок.', 'Откройте грудную клетку вверх.', 'Дышите глубоко.'],
         cues: ['Колени вместе'],
@@ -38,17 +38,17 @@ export const seedData: AppData = {
       },
       {
         id: 'ex-cat-cow',
-        name: 'Cat-cow',
+        name: 'Кошка-корова',
         tags: ['спина'],
-        steps: ['На четвереньках.', 'Прогиб/округление спины.'],
+        steps: ['Встаньте на четвереньки.', 'Плавно прогибайте и округляйте спину.'],
         cues: ['Движение мягкое'],
         mistakes: ['Задержка дыхания'],
-        regressions: ['Сидя'],
+        regressions: ['Сидя на стуле'],
         progressions: ['Добавить паузу']
       },
       {
         id: 'ex-hip-flexor',
-        name: 'Hip flexor stretch (half-kneeling)',
+        name: 'Растяжка сгибателей бедра',
         tags: ['таз'],
         steps: ['Полуколено.', 'Подайте таз вперёд.', 'Держите 20–30 сек.'],
         cues: ['Корпус ровный'],
@@ -58,7 +58,7 @@ export const seedData: AppData = {
       },
       {
         id: 'ex-glute-bridge',
-        name: 'Glute bridge',
+        name: 'Ягодичный мостик',
         tags: ['ягодицы'],
         steps: ['Лёжа на спине.', 'Поднимите таз.', 'Сожмите ягодицы.'],
         cues: ['Рёбра вниз'],
@@ -68,9 +68,9 @@ export const seedData: AppData = {
       },
       {
         id: 'ex-bird-dog',
-        name: 'Bird-dog',
+        name: 'Птица-собака',
         tags: ['стабилизация'],
-        steps: ['Рука+нога в линию.', 'Держите 3–5 сек.'],
+        steps: ['Рука и нога в линию.', 'Держите 3–5 сек.'],
         cues: ['Таз стабилен'],
         mistakes: ['Провал в пояснице'],
         regressions: ['По отдельности'],
@@ -78,7 +78,7 @@ export const seedData: AppData = {
       },
       {
         id: 'ex-ankle-wall',
-        name: 'Ankle wall mobility',
+        name: 'Мобилизация голеностопа у стены',
         tags: ['голеностоп'],
         steps: ['Колено к стене.', 'Пятка на полу.'],
         cues: ['Контроль'],
@@ -88,7 +88,7 @@ export const seedData: AppData = {
       },
       {
         id: 'ex-chair-squat',
-        name: 'Chair squat to box',
+        name: 'Присед на короб',
         tags: ['ноги'],
         steps: ['Сядьте на короб.', 'Встаньте без рывка.'],
         cues: ['Колени наружу'],
@@ -98,9 +98,9 @@ export const seedData: AppData = {
       },
       {
         id: 'ex-incline-pushup',
-        name: 'Incline push-up',
+        name: 'Отжимания от опоры',
         tags: ['грудь'],
-        steps: ['От стены/стола.', 'Опускайтесь контролируемо.'],
+        steps: ['Упритесь в стол или стену.', 'Опускайтесь контролируемо.'],
         cues: ['Корпус прямой'],
         mistakes: ['Прогиб'],
         regressions: ['Выше опора'],
@@ -108,9 +108,9 @@ export const seedData: AppData = {
       },
       {
         id: 'ex-backpack-row',
-        name: 'Backpack row',
+        name: 'Тяга рюкзака',
         tags: ['спина'],
-        steps: ['Тяга рюкзака к поясу.', 'Пауза вверху.'],
+        steps: ['Тяните рюкзак к поясу.', 'Пауза вверху.'],
         cues: ['Лопатки назад'],
         mistakes: ['Круглая спина'],
         regressions: ['Лёгкий вес'],
@@ -118,17 +118,17 @@ export const seedData: AppData = {
       },
       {
         id: 'ex-dead-bug',
-        name: 'Dead bug',
+        name: 'Мёртвый жук',
         tags: ['кор'],
         steps: ['Спина прижата.', 'Плавно опускайте руку/ногу.'],
         cues: ['Поясница на полу'],
         mistakes: ['Прогиб'],
         regressions: ['Только руки'],
-        progressions: ['Дольше']
+        progressions: ['Дольше удержание']
       },
       {
         id: 'ex-knee-plank',
-        name: 'Knee plank',
+        name: 'Планка с колен',
         tags: ['кор'],
         steps: ['Колени на полу.', 'Держите 20–30 сек.'],
         cues: ['Рёбра вниз'],
@@ -138,9 +138,9 @@ export const seedData: AppData = {
       },
       {
         id: 'ex-mcgill',
-        name: 'McGill curl-up',
+        name: 'Скручивание МакГилла',
         tags: ['кор'],
-        steps: ['Одна нога согнута.', 'Небольшой подъём головы/плеч.'],
+        steps: ['Одна нога согнута.', 'Небольшой подъём головы и плеч.'],
         cues: ['Шея нейтрально'],
         mistakes: ['Сильный подъём'],
         regressions: ['Меньше время'],
@@ -150,30 +150,30 @@ export const seedData: AppData = {
     protocols: [
       {
         id: 'proto-r10-warmup',
-        name: 'R-10 Warmup',
+        name: 'Разминка R10',
         description: 'Разминка 10 минут с мягкой мобилизацией.',
         steps: [
-          { text: 'Chin tuck', durationSec: 30, exerciseRef: 'ex-chin-tuck' },
-          { text: 'Neck side bend', durationSec: 60, exerciseRef: 'ex-neck-side-bend' },
-          { text: 'Open book rotation', durationSec: 60, exerciseRef: 'ex-open-book' },
-          { text: 'Cat-cow', durationSec: 60, exerciseRef: 'ex-cat-cow' },
-          { text: 'Hip flexor stretch', durationSec: 60, exerciseRef: 'ex-hip-flexor' },
-          { text: 'Glute bridge', durationSec: 60, exerciseRef: 'ex-glute-bridge' },
-          { text: 'Bird-dog', durationSec: 60, exerciseRef: 'ex-bird-dog' },
-          { text: 'Ankle wall mobility', durationSec: 60, exerciseRef: 'ex-ankle-wall' }
+          { text: 'Втягивание подбородка', durationSec: 30, exerciseRef: 'ex-chin-tuck' },
+          { text: 'Наклон шеи в сторону', durationSec: 60, exerciseRef: 'ex-neck-side-bend' },
+          { text: 'Поворот грудного отдела', durationSec: 60, exerciseRef: 'ex-open-book' },
+          { text: 'Кошка-корова', durationSec: 60, exerciseRef: 'ex-cat-cow' },
+          { text: 'Сгибатели бедра', durationSec: 60, exerciseRef: 'ex-hip-flexor' },
+          { text: 'Ягодичный мостик', durationSec: 60, exerciseRef: 'ex-glute-bridge' },
+          { text: 'Птица-собака', durationSec: 60, exerciseRef: 'ex-bird-dog' },
+          { text: 'Голеностоп у стены', durationSec: 60, exerciseRef: 'ex-ankle-wall' }
         ]
       },
       {
         id: 'proto-s0-str',
-        name: 'S0-STR',
+        name: 'Силовой круг S0',
         description: 'Круговая тренировка, 2 круга. Контроль темпа, отдых 60 сек.',
         steps: [
-          { text: 'Chair squat to box x8', exerciseRef: 'ex-chair-squat' },
-          { text: 'Incline push-up x8', exerciseRef: 'ex-incline-pushup' },
-          { text: 'Backpack row x10', exerciseRef: 'ex-backpack-row' },
-          { text: 'Dead bug x8/стор', exerciseRef: 'ex-dead-bug' },
-          { text: 'Knee plank 20 сек', exerciseRef: 'ex-knee-plank' },
-          { text: 'McGill curl-up x6/стор', exerciseRef: 'ex-mcgill' }
+          { text: 'Присед на короб x8', exerciseRef: 'ex-chair-squat' },
+          { text: 'Отжимания от опоры x8', exerciseRef: 'ex-incline-pushup' },
+          { text: 'Тяга рюкзака x10', exerciseRef: 'ex-backpack-row' },
+          { text: 'Мёртвый жук x8/стор', exerciseRef: 'ex-dead-bug' },
+          { text: 'Планка с колен 20 сек', exerciseRef: 'ex-knee-plank' },
+          { text: 'Скручивание МакГилла x6/стор', exerciseRef: 'ex-mcgill' }
         ]
       }
     ],
@@ -330,9 +330,10 @@ export const seedData: AppData = {
           { productRef: 'prod-chicken-thighs', grams: 360 },
           { productRef: 'prod-olive-oil', grams: 10 }
         ],
-        steps: ['Смешайте специи.', 'Запекать 25–30 мин при 200°С.'],
+        steps: ['Смешайте специи.', 'Запекайте 25–30 мин при 200°С.'],
         notes: 'Соль/перец по вкусу.',
-        tags: ['ужин']
+        tags: ['ужин'],
+        category: 'main'
       },
       {
         id: 'rec-cooked-rice',
@@ -340,7 +341,8 @@ export const seedData: AppData = {
         servings: 3,
         ingredients: [{ productRef: 'prod-rice', grams: 150 }],
         steps: ['Промыть рис.', 'Варить 18–20 мин.'],
-        tags: ['гарнир']
+        tags: ['гарнир'],
+        category: 'side'
       },
       {
         id: 'rec-cooked-buckwheat',
@@ -348,7 +350,8 @@ export const seedData: AppData = {
         servings: 3,
         ingredients: [{ productRef: 'prod-buckwheat', grams: 180 }],
         steps: ['Промыть гречку.', 'Варить 15–18 мин.'],
-        tags: ['гарнир']
+        tags: ['гарнир'],
+        category: 'side'
       },
       {
         id: 'rec-boiled-potatoes',
@@ -356,11 +359,12 @@ export const seedData: AppData = {
         servings: 3,
         ingredients: [{ productRef: 'prod-potatoes', grams: 600 }],
         steps: ['Очистить.', 'Варить 20–25 мин.'],
-        tags: ['гарнир']
+        tags: ['гарнир'],
+        category: 'side'
       },
       {
         id: 'rec-salad',
-        name: 'Салат огурец+помидор+салат',
+        name: 'Салат огурец + помидор + салат',
         servings: 2,
         ingredients: [
           { productRef: 'prod-cucumber', grams: 200 },
@@ -369,7 +373,8 @@ export const seedData: AppData = {
           { productRef: 'prod-olive-oil', grams: 10 }
         ],
         steps: ['Нарезать.', 'Смешать.', 'Заправить.'],
-        tags: ['салат']
+        tags: ['салат'],
+        category: 'salad'
       },
       {
         id: 'rec-baked-fish',
@@ -380,7 +385,8 @@ export const seedData: AppData = {
           { productRef: 'prod-olive-oil', grams: 8 }
         ],
         steps: ['Сбрызнуть лимоном.', 'Запечь 20 мин.'],
-        tags: ['ужин']
+        tags: ['ужин'],
+        category: 'main'
       },
       {
         id: 'rec-turkey-patties',
@@ -391,7 +397,8 @@ export const seedData: AppData = {
           { productRef: 'prod-onion', grams: 80 }
         ],
         steps: ['Смешать фарш и лук.', 'Сформировать котлеты.', 'Обжарить/запечь.'],
-        tags: ['обед']
+        tags: ['обед'],
+        category: 'main'
       },
       {
         id: 'rec-omelet',
@@ -402,25 +409,26 @@ export const seedData: AppData = {
           { productRef: 'prod-broccoli', grams: 100 }
         ],
         steps: ['Взбить яйца.', 'Добавить брокколи.', 'Готовить 6–8 мин.'],
-        tags: ['завтрак']
+        tags: ['завтрак'],
+        category: 'breakfast'
       }
     ],
     rules: [
       {
         id: 'rule-no-delivery',
-        name: 'No delivery during S0',
+        name: 'Без доставки в период S0',
         text: 'В период S0 — без доставки, готовим дома.',
         tags: ['питание']
       },
       {
         id: 'rule-delay-cigarette',
-        name: 'Delay first cigarette by 15 minutes',
+        name: 'Отложить первую сигарету',
         text: 'Отложить первую сигарету на 15 минут.',
         tags: ['курение']
       },
       {
         id: 'rule-water-breaths',
-        name: 'Before stress cigarette: water + 10 slow breaths',
+        name: 'Перед стрессовой сигаретой: вода + дыхание',
         text: 'Перед стрессовой сигаретой: вода + 10 медленных вдохов.',
         tags: ['курение']
       }
@@ -493,141 +501,230 @@ export const seedData: AppData = {
         id: 'day-2026-01-16',
         date: '2026-01-16',
         periodId: 'period-s0',
-        tasks: [
+        tasks: [],
+        mealsPlan: {
+          breakfast: [
+            {
+              id: 'plan-16-breakfast-1',
+              kind: 'dish',
+              refId: 'rec-omelet',
+              plannedServings: 1
+            }
+          ],
+          lunch: [
+            {
+              id: 'plan-16-lunch-1',
+              kind: 'dish',
+              refId: 'rec-turkey-patties',
+              plannedServings: 1
+            },
+            {
+              id: 'plan-16-lunch-2',
+              kind: 'dish',
+              refId: 'rec-cooked-buckwheat',
+              plannedServings: 1
+            }
+          ],
+          dinner: [
+            {
+              id: 'plan-16-dinner-1',
+              kind: 'dish',
+              refId: 'rec-baked-fish',
+              plannedServings: 1
+            },
+            {
+              id: 'plan-16-dinner-2',
+              kind: 'dish',
+              refId: 'rec-salad',
+              plannedServings: 1
+            }
+          ],
+          snack: [
+            {
+              id: 'plan-16-snack-1',
+              kind: 'product',
+              refId: 'prod-greek-yogurt',
+              plannedGrams: 200
+            }
+          ]
+        },
+        workoutsPlan: [
           {
-            id: 'task-16-warmup',
-            templateRef: 'tpl-warmup',
-            status: 'planned',
-            assignedRefs: [{ kind: 'protocol', refId: 'proto-r10-warmup' }]
+            id: 'plan-16-workout-1',
+            timeOfDay: 'morning',
+            protocolRef: 'proto-r10-warmup',
+            isRequired: true,
+            kind: 'workout'
           },
           {
-            id: 'task-16-movement',
-            templateRef: 'tpl-movement',
-            status: 'planned',
-            target: { minutes: 20 }
+            id: 'plan-16-movement-1',
+            timeOfDay: 'day',
+            plannedMinutes: 10,
+            kind: 'movement'
           },
           {
-            id: 'task-16-strength',
-            templateRef: 'tpl-strength',
-            status: 'planned',
-            assignedRefs: [{ kind: 'protocol', refId: 'proto-s0-str' }]
-          },
-          {
-            id: 'task-16-nutrition',
-            templateRef: 'tpl-nutrition',
-            status: 'planned',
-            assignedRefs: [{ kind: 'rule', refId: 'rule-no-delivery' }]
-          },
-          {
-            id: 'task-16-smoking',
-            templateRef: 'tpl-smoking',
-            status: 'planned',
-            assignedRefs: [{ kind: 'rule', refId: 'rule-delay-cigarette' }]
-          },
-          {
-            id: 'task-16-measure',
-            templateRef: 'tpl-measurement',
-            status: 'planned'
-          },
-          {
-            id: 'task-16-sleep',
-            templateRef: 'tpl-sleep',
-            status: 'planned'
+            id: 'plan-16-workout-2',
+            timeOfDay: 'evening',
+            protocolRef: 'proto-s0-str',
+            isRequired: true,
+            kind: 'workout'
           }
-        ]
+        ],
+        requirements: {
+          requireWeight: true,
+          requireWaist: false,
+          requirePhotos: ['front'],
+          smokingTargetMax: 5,
+          kcalTarget: 1800
+        }
       },
       {
         id: 'day-2026-01-17',
         date: '2026-01-17',
         periodId: 'period-s0',
-        tasks: [
+        tasks: [],
+        mealsPlan: {
+          breakfast: [
+            {
+              id: 'plan-17-breakfast-1',
+              kind: 'dish',
+              refId: 'rec-omelet',
+              plannedServings: 1
+            }
+          ],
+          lunch: [
+            {
+              id: 'plan-17-lunch-1',
+              kind: 'dish',
+              refId: 'rec-baked-chicken',
+              plannedServings: 1
+            },
+            {
+              id: 'plan-17-lunch-2',
+              kind: 'dish',
+              refId: 'rec-cooked-rice',
+              plannedServings: 1
+            }
+          ],
+          dinner: [
+            {
+              id: 'plan-17-dinner-1',
+              kind: 'dish',
+              refId: 'rec-baked-fish',
+              plannedServings: 1
+            },
+            {
+              id: 'plan-17-dinner-2',
+              kind: 'dish',
+              refId: 'rec-salad',
+              plannedServings: 1
+            }
+          ],
+          snack: []
+        },
+        workoutsPlan: [
           {
-            id: 'task-17-warmup',
-            templateRef: 'tpl-warmup',
-            status: 'planned',
-            assignedRefs: [{ kind: 'protocol', refId: 'proto-r10-warmup' }]
+            id: 'plan-17-workout-1',
+            timeOfDay: 'morning',
+            protocolRef: 'proto-r10-warmup',
+            isRequired: true,
+            kind: 'workout'
           },
           {
-            id: 'task-17-movement',
-            templateRef: 'tpl-movement',
-            status: 'planned',
-            target: { minutes: 25 }
+            id: 'plan-17-movement-1',
+            timeOfDay: 'day',
+            plannedMinutes: 15,
+            kind: 'movement'
           },
           {
-            id: 'task-17-strength',
-            templateRef: 'tpl-strength',
-            status: 'planned',
-            assignedRefs: [{ kind: 'protocol', refId: 'proto-s0-str' }]
-          },
-          {
-            id: 'task-17-nutrition',
-            templateRef: 'tpl-nutrition',
-            status: 'planned',
-            assignedRefs: [{ kind: 'rule', refId: 'rule-no-delivery' }]
-          },
-          {
-            id: 'task-17-smoking',
-            templateRef: 'tpl-smoking',
-            status: 'planned',
-            assignedRefs: [{ kind: 'rule', refId: 'rule-water-breaths' }]
-          },
-          {
-            id: 'task-17-measure',
-            templateRef: 'tpl-measurement',
-            status: 'planned'
-          },
-          {
-            id: 'task-17-sleep',
-            templateRef: 'tpl-sleep',
-            status: 'planned'
+            id: 'plan-17-workout-2',
+            timeOfDay: 'evening',
+            protocolRef: 'proto-s0-str',
+            isRequired: true,
+            kind: 'workout'
           }
-        ]
+        ],
+        requirements: {
+          requireWeight: false,
+          requireWaist: true,
+          requirePhotos: ['front', 'side'],
+          smokingTargetMax: 5,
+          kcalTarget: 1800
+        }
       },
       {
         id: 'day-2026-01-18',
         date: '2026-01-18',
         periodId: 'period-s0',
-        tasks: [
+        tasks: [],
+        mealsPlan: {
+          breakfast: [
+            {
+              id: 'plan-18-breakfast-1',
+              kind: 'product',
+              refId: 'prod-eggs',
+              plannedGrams: 150
+            }
+          ],
+          lunch: [
+            {
+              id: 'plan-18-lunch-1',
+              kind: 'dish',
+              refId: 'rec-turkey-patties',
+              plannedServings: 1
+            },
+            {
+              id: 'plan-18-lunch-2',
+              kind: 'dish',
+              refId: 'rec-cooked-buckwheat',
+              plannedServings: 1
+            }
+          ],
+          dinner: [
+            {
+              id: 'plan-18-dinner-1',
+              kind: 'dish',
+              refId: 'rec-baked-chicken',
+              plannedServings: 1
+            },
+            {
+              id: 'plan-18-dinner-2',
+              kind: 'dish',
+              refId: 'rec-salad',
+              plannedServings: 1
+            }
+          ],
+          snack: [
+            {
+              id: 'plan-18-snack-1',
+              kind: 'product',
+              refId: 'prod-apple',
+              plannedGrams: 150
+            }
+          ]
+        },
+        workoutsPlan: [
           {
-            id: 'task-18-warmup',
-            templateRef: 'tpl-warmup',
-            status: 'planned',
-            assignedRefs: [{ kind: 'protocol', refId: 'proto-r10-warmup' }]
+            id: 'plan-18-workout-1',
+            timeOfDay: 'morning',
+            protocolRef: 'proto-r10-warmup',
+            isRequired: true,
+            kind: 'workout'
           },
           {
-            id: 'task-18-movement',
-            templateRef: 'tpl-movement',
-            status: 'planned',
-            target: { minutes: 30 }
-          },
-          {
-            id: 'task-18-strength',
-            templateRef: 'tpl-strength',
-            status: 'planned',
-            assignedRefs: [{ kind: 'protocol', refId: 'proto-s0-str' }]
-          },
-          {
-            id: 'task-18-nutrition',
-            templateRef: 'tpl-nutrition',
-            status: 'planned',
-            assignedRefs: [{ kind: 'rule', refId: 'rule-no-delivery' }]
-          },
-          {
-            id: 'task-18-smoking',
-            templateRef: 'tpl-smoking',
-            status: 'planned'
-          },
-          {
-            id: 'task-18-measure',
-            templateRef: 'tpl-measurement',
-            status: 'planned'
-          },
-          {
-            id: 'task-18-sleep',
-            templateRef: 'tpl-sleep',
-            status: 'planned'
+            id: 'plan-18-movement-1',
+            timeOfDay: 'day',
+            plannedMinutes: 20,
+            kind: 'movement'
           }
-        ]
+        ],
+        requirements: {
+          requireWeight: false,
+          requireWaist: false,
+          requirePhotos: [],
+          smokingTargetMax: 4,
+          kcalTarget: 1750
+        }
       }
     ]
   },

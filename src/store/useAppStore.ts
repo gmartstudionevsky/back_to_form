@@ -181,9 +181,27 @@ export const useAppStore = create<AppState>((set, get) => ({
   createOrGetDayPlan: (date, periodId) => {
     let plan = get().data.planner.dayPlans.find(item => item.date === date);
     if (!plan) {
-      plan = { id: createId(), date, periodId, tasks: [] };
+      plan = {
+        id: createId(),
+        date,
+        periodId,
+        tasks: [],
+        mealsPlan: { breakfast: [], lunch: [], dinner: [], snack: [] },
+        workoutsPlan: [],
+        requirements: { requireWeight: false, requireWaist: false, requirePhotos: [] }
+      };
       get().updateData(data => {
         data.planner.dayPlans.push(plan as DayPlan);
+        return { ...data };
+      });
+    } else {
+      get().updateData(data => {
+        const existing = data.planner.dayPlans.find(item => item.date === date);
+        if (!existing) return { ...data };
+        existing.mealsPlan ??= { breakfast: [], lunch: [], dinner: [], snack: [] };
+        existing.workoutsPlan ??= [];
+        existing.requirements ??= { requireWeight: false, requireWaist: false, requirePhotos: [] };
+        existing.tasks ??= [];
         return { ...data };
       });
     }
@@ -193,7 +211,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().updateData(data => {
       const plan = data.planner.dayPlans.find(item => item.date === date);
       if (!plan) return { ...data };
-      plan.tasks = plan.tasks.map(task =>
+      plan.tasks = (plan.tasks ?? []).map(task =>
         task.id === taskId ? { ...task, status } : task
       );
       return { ...data };
@@ -203,7 +221,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().updateData(data => {
       const plan = data.planner.dayPlans.find(item => item.date === date);
       if (!plan) return { ...data };
-      plan.tasks = plan.tasks.map(task =>
+      plan.tasks = (plan.tasks ?? []).map(task =>
         task.id === taskId ? { ...task, actual } : task
       );
       return { ...data };
@@ -213,7 +231,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().updateData(data => {
       const plan = data.planner.dayPlans.find(item => item.date === date);
       if (!plan) return { ...data };
-      plan.tasks = plan.tasks.map(task =>
+      plan.tasks = (plan.tasks ?? []).map(task =>
         task.id === taskId ? { ...task, ...payload } : task
       );
       return { ...data };

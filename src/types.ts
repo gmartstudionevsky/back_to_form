@@ -9,6 +9,10 @@ export type Exercise = {
   mistakes: string[];
   regressions: string[];
   progressions: string[];
+  media?: {
+    youtubeUrl?: string;
+    localVideoBlobKey?: string;
+  };
 };
 
 export type ProtocolStep = {
@@ -47,6 +51,8 @@ export type Recipe = {
   steps: string[];
   notes?: string;
   tags: string[];
+  category: 'breakfast' | 'main' | 'side' | 'salad' | 'snack' | 'dessert' | 'drink' | 'cheat';
+  complexity?: 'easy' | 'medium';
 };
 
 export type Rule = {
@@ -88,7 +94,21 @@ export type DayPlan = {
   id: UUID;
   date: string;
   periodId?: UUID;
-  tasks: TaskInstance[];
+  tasks?: TaskInstance[];
+  mealsPlan: {
+    breakfast: MealPlanItem[];
+    lunch: MealPlanItem[];
+    dinner: MealPlanItem[];
+    snack: MealPlanItem[];
+  };
+  workoutsPlan: WorkoutPlanItem[];
+  requirements: {
+    requireWeight: boolean;
+    requireWaist: boolean;
+    requirePhotos: Array<'front' | 'side'>;
+    smokingTargetMax?: number;
+    kcalTarget?: number;
+  };
   notes?: string;
 };
 
@@ -96,12 +116,38 @@ export type FoodEntry = {
   id: UUID;
   time?: string;
   meal: 'breakfast' | 'lunch' | 'dinner' | 'snack';
-  kind: 'product' | 'recipe' | 'free';
+  kind: 'product' | 'dish' | 'free' | 'cheat';
   refId?: UUID;
   grams?: number;
   servings?: number;
   kcalOverride?: number;
   title?: string;
+  notes?: string;
+  cheatCategory?: 'pizza' | 'fastfood' | 'sweets' | 'other';
+};
+
+export type MealPlanItem = {
+  id: UUID;
+  kind: 'product' | 'dish' | 'free' | 'cheat';
+  refId?: UUID;
+  title?: string;
+  plannedGrams?: number;
+  plannedServings?: number;
+  plannedTime?: string;
+  notes?: string;
+  cheatCategory?: 'pizza' | 'fastfood' | 'sweets' | 'other';
+  completed?: boolean;
+};
+
+export type WorkoutPlanItem = {
+  id: UUID;
+  timeOfDay: 'morning' | 'day' | 'evening';
+  protocolRef?: UUID;
+  isRequired?: boolean;
+  kind?: 'workout' | 'movement';
+  plannedMinutes?: number;
+  completedMinutes?: number;
+  completed?: boolean;
   notes?: string;
 };
 
