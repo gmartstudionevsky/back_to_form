@@ -2,18 +2,27 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { savePhotoBlob, loadPhotoBlob, deletePhotoBlob } from '../storage/photoDb';
 import { BottomSheet } from '../components/BottomSheet';
+import { todayISO } from '../utils/date';
 
 const PhotosPage = () => {
   const { data, addPhotoMeta, removePhotoMeta } = useAppStore();
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(todayISO());
   const [uploadMeta, setUploadMeta] = useState({
     kind: 'front' as const,
-    date: new Date().toISOString().slice(0, 10),
+    date: todayISO(),
     notes: ''
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
+
+  const dayPlan = data.planner.dayPlans.find(plan => plan.date === selectedDate);
+  const requiredPhotos = dayPlan?.requirements.requirePhotos ?? [];
+  const photoLabels: Record<'front' | 'side', string> = {
+    front: 'фронт',
+    side: 'профиль'
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -50,7 +59,7 @@ const PhotosPage = () => {
       notes: uploadMeta.notes
     });
     setSelectedFile(null);
-    setUploadMeta({ kind: 'front', date: new Date().toISOString().slice(0, 10), notes: '' });
+    setUploadMeta({ kind: 'front', date: todayISO(), notes: '' });
     setSheetOpen(false);
   };
 
@@ -76,18 +85,47 @@ const PhotosPage = () => {
     }, {});
   }, [data.logs.photos]);
 
+  const openPlanUpload = (kind: 'front' | 'side') => {
+    setUploadMeta(prev => ({ ...prev, kind, date: selectedDate }));
+    setSheetOpen(true);
+  };
+
   return (
     <section className="space-y-4">
       <header className="space-y-2">
-        <h1 className="text-2xl font-bold">Photos</h1>
+        <h1 className="text-2xl font-bold">Фото</h1>
         <p className="text-sm text-slate-500">
           Фото хранятся локально. Экспорт JSON не включает файлы.
         </p>
       </header>
 
+      <div className="card p-4 space-y-3">
+        <label className="text-sm font-semibold text-slate-600">Дата</label>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={event => setSelectedDate(event.target.value)}
+          className="input"
+        />
+        {requiredPhotos.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">Нужно сделать сегодня:</p>
+            <div className="flex gap-2">
+              {requiredPhotos.map(kind => (
+                <button key={kind} className="btn-primary" onClick={() => openPlanUpload(kind)}>
+                  Добавить {photoLabels[kind]}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">Нет обязательных фото на эту дату.</p>
+        )}
+      </div>
+
       <div className="card p-4">
         <button className="btn-primary w-full" onClick={() => setSheetOpen(true)}>
-          Добавить фото
+          Добавить фото вручную
         </button>
       </div>
 
@@ -147,9 +185,9 @@ const PhotosPage = () => {
             setUploadMeta(prev => ({ ...prev, kind: event.target.value as typeof prev.kind }))
           }
         >
-          <option value="front">Front</option>
-          <option value="side">Side</option>
-          <option value="other">Other</option>
+          <option value="front">Фронт</option>
+          <option value="side">Профиль</option>
+          <option value="other">Другое</option>
         </select>
         <label className="text-sm font-semibold text-slate-600">Дата</label>
         <input
