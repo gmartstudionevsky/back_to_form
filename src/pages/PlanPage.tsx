@@ -48,9 +48,13 @@ const PlanPage = () => {
     startDate: '',
     endDate: ''
   });
+  const canAddPeriod = Boolean(startDate && endDate && startDate <= endDate);
+  const canCopyMenu = Boolean(
+    menuCopy.sourceDate && menuCopy.startDate && menuCopy.endDate && menuCopy.startDate <= menuCopy.endDate
+  );
 
   const addPeriod = () => {
-    if (!startDate || !endDate) return;
+    if (!canAddPeriod) return;
     updateData(state => {
       const period: Period = {
         id: crypto.randomUUID(),
@@ -146,7 +150,7 @@ const PlanPage = () => {
   };
 
   const copyMenuRange = () => {
-    if (!menuCopy.sourceDate || !menuCopy.startDate || !menuCopy.endDate) return;
+    if (!canCopyMenu) return;
     updateData(state => {
       const sourcePlan = state.planner.dayPlans.find(item => item.date === menuCopy.sourceDate);
       if (!sourcePlan) return { ...state };
@@ -177,11 +181,11 @@ const PlanPage = () => {
     <section className="space-y-4">
       <header className="space-y-2">
         <h1 className="text-2xl font-bold">План</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {tabs.map(tab => (
             <button
               key={tab}
-              className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide ${
+              className={`flex-1 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide ${
                 activeTab === tab ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'
               }`}
               onClick={() => setActiveTab(tab)}
@@ -202,7 +206,7 @@ const PlanPage = () => {
               value={name}
               onChange={event => setName(event.target.value)}
             />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <input
                 className="input"
                 type="date"
@@ -216,7 +220,7 @@ const PlanPage = () => {
                 onChange={event => setEndDate(event.target.value)}
               />
             </div>
-            <button className="btn-primary" onClick={addPeriod}>
+            <button className="btn-primary w-full" onClick={addPeriod} disabled={!canAddPeriod}>
               Добавить период
             </button>
           </div>
@@ -245,11 +249,13 @@ const PlanPage = () => {
           {selectedPeriod ? (
             <div className="card p-4 space-y-3">
               <h2 className="section-title">Дни периода</h2>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {dayList.map(date => (
                   <button
                     key={date}
-                    className={`btn-secondary ${editorDate === date ? 'border border-slate-900' : ''}`}
+                    className={`btn-secondary w-full ${
+                      editorDate === date ? 'border border-slate-900' : ''
+                    }`}
                     onClick={() => openDayEditor(date)}
                   >
                     {date}
@@ -265,10 +271,11 @@ const PlanPage = () => {
 
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold">Требования</h3>
-                <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
                   <label className="flex items-center gap-2">
                     <input
                       type="checkbox"
+                      className="h-5 w-5"
                       checked={dayPlan.requirements.requireWeight}
                       onChange={event =>
                         updateData(state => {
@@ -284,6 +291,7 @@ const PlanPage = () => {
                   <label className="flex items-center gap-2">
                     <input
                       type="checkbox"
+                      className="h-5 w-5"
                       checked={dayPlan.requirements.requireWaist}
                       onChange={event =>
                         updateData(state => {
@@ -299,6 +307,7 @@ const PlanPage = () => {
                   <label className="flex items-center gap-2">
                     <input
                       type="checkbox"
+                      className="h-5 w-5"
                       checked={dayPlan.requirements.requirePhotos.includes('front')}
                       onChange={event =>
                         updateData(state => {
@@ -316,6 +325,7 @@ const PlanPage = () => {
                   <label className="flex items-center gap-2">
                     <input
                       type="checkbox"
+                      className="h-5 w-5"
                       checked={dayPlan.requirements.requirePhotos.includes('side')}
                       onChange={event =>
                         updateData(state => {
@@ -331,7 +341,7 @@ const PlanPage = () => {
                     Фото side
                   </label>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <input
                     className="input"
                     type="number"
@@ -364,10 +374,10 @@ const PlanPage = () => {
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <h3 className="text-sm font-semibold">Питание</h3>
                   <button
-                    className="btn-secondary"
+                    className="btn-secondary w-full sm:w-auto"
                     onClick={() =>
                       setMealSheet({
                         meal: 'breakfast',
@@ -390,7 +400,10 @@ const PlanPage = () => {
                       <p className="text-xs text-slate-500">Нет позиций</p>
                     ) : (
                       dayPlan.mealsPlan[meal].map(item => (
-                        <div key={item.id} className="flex items-center justify-between rounded-xl border p-2">
+                        <div
+                          key={item.id}
+                          className="flex flex-col gap-2 rounded-xl border p-2 sm:flex-row sm:items-center sm:justify-between"
+                        >
                           <div className="text-sm">
                             {item.kind === 'dish'
                               ? data.library.recipes.find(dish => dish.id === item.refId)?.name
@@ -399,7 +412,7 @@ const PlanPage = () => {
                               : item.title}
                           </div>
                           <button
-                            className="btn-secondary text-red-500"
+                            className="btn-secondary w-full text-red-500 sm:w-auto"
                             onClick={() =>
                               updateData(state => {
                                 const plan = state.planner.dayPlans.find(
@@ -423,10 +436,10 @@ const PlanPage = () => {
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <h3 className="text-sm font-semibold">Тренировки</h3>
                   <button
-                    className="btn-secondary"
+                    className="btn-secondary w-full sm:w-auto"
                     onClick={() =>
                       setWorkoutSheet({
                         timeOfDay: 'morning',
@@ -444,14 +457,17 @@ const PlanPage = () => {
                   <p className="text-xs text-slate-500">Нет тренировок</p>
                 ) : (
                   dayPlan.workoutsPlan.map(item => (
-                    <div key={item.id} className="flex items-center justify-between rounded-xl border p-2">
+                    <div
+                      key={item.id}
+                      className="flex flex-col gap-2 rounded-xl border p-2 sm:flex-row sm:items-center sm:justify-between"
+                    >
                       <div className="text-sm">
                         {item.kind === 'movement'
                           ? `Движение · ${item.plannedMinutes ?? 10} мин`
                           : data.library.protocols.find(proto => proto.id === item.protocolRef)?.name}
                       </div>
                       <button
-                        className="btn-secondary text-red-500"
+                        className="btn-secondary w-full text-red-500 sm:w-auto"
                         onClick={() =>
                           updateData(state => {
                             const plan = state.planner.dayPlans.find(
@@ -497,7 +513,7 @@ const PlanPage = () => {
                 const kcal = plannedKcal(date);
                 return (
                   <div key={date} className="card p-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <h3 className="text-sm font-semibold">{date}</h3>
                         <p className="text-xs text-slate-500">План: {kcal.toFixed(0)} ккал</p>
@@ -520,7 +536,7 @@ const PlanPage = () => {
               value={menuCopy.sourceDate}
               onChange={event => setMenuCopy(prev => ({ ...prev, sourceDate: event.target.value }))}
             />
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <input
                 className="input"
                 type="date"
@@ -534,7 +550,7 @@ const PlanPage = () => {
                 onChange={event => setMenuCopy(prev => ({ ...prev, endDate: event.target.value }))}
               />
             </div>
-            <button className="btn-secondary" onClick={copyMenuRange}>
+            <button className="btn-secondary w-full" onClick={copyMenuRange} disabled={!canCopyMenu}>
               Скопировать меню
             </button>
           </div>
@@ -664,7 +680,7 @@ const PlanPage = () => {
               </>
             )}
 
-            <button className="btn-primary" onClick={addMealToPlan}>
+            <button className="btn-primary w-full" onClick={addMealToPlan}>
               Сохранить в план
             </button>
           </div>
@@ -738,6 +754,7 @@ const PlanPage = () => {
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
+                className="h-5 w-5"
                 checked={workoutSheet.isRequired}
                 onChange={event =>
                   setWorkoutSheet(prev => (prev ? { ...prev, isRequired: event.target.checked } : prev))
@@ -745,7 +762,7 @@ const PlanPage = () => {
               />
               Обязательная
             </label>
-            <button className="btn-primary" onClick={addWorkoutToPlan}>
+            <button className="btn-primary w-full" onClick={addWorkoutToPlan}>
               Сохранить
             </button>
           </div>

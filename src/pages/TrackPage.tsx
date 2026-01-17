@@ -296,7 +296,7 @@ const TrackPage = () => {
     <section className="space-y-4">
       <header className="space-y-2">
         <h1 className="text-2xl font-bold">Трекер</h1>
-        <div className="flex gap-2 overflow-x-auto">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {tabs.map(tab => (
             <button
               key={tab}
@@ -333,12 +333,12 @@ const TrackPage = () => {
             </p>
           </div>
           <div className="card p-4">
-            <div className="flex items-center justify-between">
-              <h2 className="section-title">Итог дня</h2>
-              <button className="btn-primary" onClick={openNewFood}>
-                Добавить запись
-              </button>
-            </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="section-title">Итог дня</h2>
+            <button className="btn-primary w-full sm:w-auto" onClick={openNewFood}>
+              Добавить запись
+            </button>
+          </div>
             <p className="mt-2 text-sm text-slate-600">
               Калории: {totals.kcal.toFixed(0)} | Б: {totals.protein.toFixed(1)} г | Ж:{' '}
               {totals.fat.toFixed(1)} г | У: {totals.carb.toFixed(1)} г
@@ -353,7 +353,7 @@ const TrackPage = () => {
                 <div className="mt-3 space-y-2">
                   {entries.map(entry => (
                     <div key={entry.id} className="rounded-xl border border-slate-200 p-3">
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <p className="text-sm font-semibold">
                             {entry.kind === 'product'
@@ -369,9 +369,9 @@ const TrackPage = () => {
                             {entry.kcalOverride ? `${entry.kcalOverride} ккал` : ''}
                           </p>
                         </div>
-                        <div className="flex flex-col gap-2">
+                        <div className="flex flex-col gap-2 sm:flex-row">
                           <button
-                            className="btn-secondary"
+                            className="btn-secondary w-full sm:w-auto"
                             onClick={() =>
                               setFoodSheet({
                                 ...entry,
@@ -383,7 +383,7 @@ const TrackPage = () => {
                             Изменить
                           </button>
                           <button
-                            className="btn-secondary text-red-500"
+                            className="btn-secondary w-full text-red-500 sm:w-auto"
                             onClick={() => deleteFoodEntry(selectedDate, entry.id)}
                           >
                             Удалить
@@ -402,11 +402,11 @@ const TrackPage = () => {
       {active === 'Активность' && (
         <div className="space-y-3">
           <div className="card p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="section-title">
                 Итог: {activityLogs.reduce((sum, log) => sum + log.minutes, 0)} мин
               </h2>
-              <button className="btn-primary" onClick={() => openActivity()}>
+              <button className="btn-primary w-full sm:w-auto" onClick={() => openActivity()}>
                 Добавить
               </button>
             </div>
@@ -426,16 +426,16 @@ const TrackPage = () => {
               ) : (
                 activityLogs.map(log => (
                   <div key={log.id} className="rounded-xl border border-slate-200 p-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-sm font-semibold">
                         {log.type} · {log.minutes} мин
                       </p>
-                      <div className="flex gap-2">
-                        <button className="btn-secondary" onClick={() => openActivity(log)}>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <button className="btn-secondary w-full sm:w-auto" onClick={() => openActivity(log)}>
                           Изменить
                         </button>
                         <button
-                          className="btn-secondary text-red-500"
+                          className="btn-secondary w-full text-red-500 sm:w-auto"
                           onClick={() => deleteActivityLog(log.id)}
                         >
                           Удалить
@@ -453,11 +453,11 @@ const TrackPage = () => {
       {active === 'Курение' && (
         <div className="space-y-3">
           <div className="card p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="section-title">
                 Итог: {smokingLogs.reduce((sum, log) => sum + log.count, 0)} шт
               </h2>
-              <button className="btn-primary" onClick={() => openSmoking()}>
+              <button className="btn-primary w-full sm:w-auto" onClick={() => openSmoking()}>
                 Добавить
               </button>
             </div>
@@ -473,17 +473,17 @@ const TrackPage = () => {
               ) : (
                 smokingLogs.map(log => (
                   <div key={log.id} className="rounded-xl border border-slate-200 p-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-sm font-semibold">{log.count} шт</p>
                         <p className="text-xs text-slate-500">Триггер: {log.trigger}</p>
                       </div>
-                      <div className="flex gap-2">
-                        <button className="btn-secondary" onClick={() => openSmoking(log)}>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <button className="btn-secondary w-full sm:w-auto" onClick={() => openSmoking(log)}>
                           Изменить
                         </button>
                         <button
-                          className="btn-secondary text-red-500"
+                          className="btn-secondary w-full text-red-500 sm:w-auto"
                           onClick={() => deleteSmokingLog(log.id)}
                         >
                           Удалить
@@ -501,9 +501,9 @@ const TrackPage = () => {
       {active === 'Измерения' && (
         <div className="space-y-3">
           <div className="card p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="section-title">Вес</h2>
-              <button className="btn-primary" onClick={() => openWeight()}>
+              <button className="btn-primary w-full sm:w-auto" onClick={() => openWeight()}>
                 Добавить
               </button>
             </div>
@@ -513,14 +513,14 @@ const TrackPage = () => {
               ) : (
                 weightLogs.map(log => (
                   <div key={log.id} className="rounded-xl border border-slate-200 p-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-sm font-semibold">{log.weightKg} кг</p>
-                      <div className="flex gap-2">
-                        <button className="btn-secondary" onClick={() => openWeight(log)}>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <button className="btn-secondary w-full sm:w-auto" onClick={() => openWeight(log)}>
                           Изменить
                         </button>
                         <button
-                          className="btn-secondary text-red-500"
+                          className="btn-secondary w-full text-red-500 sm:w-auto"
                           onClick={() => deleteWeightLog(log.id)}
                         >
                           Удалить
@@ -533,9 +533,9 @@ const TrackPage = () => {
             </div>
           </div>
           <div className="card p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="section-title">Талия</h2>
-              <button className="btn-primary" onClick={() => openWaist()}>
+              <button className="btn-primary w-full sm:w-auto" onClick={() => openWaist()}>
                 Добавить
               </button>
             </div>
@@ -545,14 +545,14 @@ const TrackPage = () => {
               ) : (
                 waistLogs.map(log => (
                   <div key={log.id} className="rounded-xl border border-slate-200 p-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-sm font-semibold">{log.waistCm} см</p>
-                      <div className="flex gap-2">
-                        <button className="btn-secondary" onClick={() => openWaist(log)}>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <button className="btn-secondary w-full sm:w-auto" onClick={() => openWaist(log)}>
                           Изменить
                         </button>
                         <button
-                          className="btn-secondary text-red-500"
+                          className="btn-secondary w-full text-red-500 sm:w-auto"
                           onClick={() => deleteWaistLog(log.id)}
                         >
                           Удалить
@@ -570,9 +570,9 @@ const TrackPage = () => {
       {active === 'Сон' && (
         <div className="space-y-3">
           <div className="card p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="section-title">Сон</h2>
-              <button className="btn-primary" onClick={() => openSleep()}>
+              <button className="btn-primary w-full sm:w-auto" onClick={() => openSleep()}>
                 Добавить
               </button>
             </div>
@@ -582,7 +582,7 @@ const TrackPage = () => {
               ) : (
                 sleepLogs.map(log => (
                   <div key={log.id} className="rounded-xl border border-slate-200 p-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-sm font-semibold">
                           {log.bedTime ?? '—'} → {log.wakeTime ?? '—'}
@@ -591,12 +591,12 @@ const TrackPage = () => {
                           Якорь: {log.anchorMet ? 'да' : 'нет'}
                         </p>
                       </div>
-                      <div className="flex gap-2">
-                        <button className="btn-secondary" onClick={() => openSleep(log)}>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <button className="btn-secondary w-full sm:w-auto" onClick={() => openSleep(log)}>
                           Изменить
                         </button>
                         <button
-                          className="btn-secondary text-red-500"
+                          className="btn-secondary w-full text-red-500 sm:w-auto"
                           onClick={() => deleteSleepLog(log.id)}
                         >
                           Удалить
@@ -809,7 +809,7 @@ const TrackPage = () => {
               </>
             )}
 
-            <button className="btn-primary" onClick={saveFood}>
+            <button className="btn-primary w-full" onClick={saveFood}>
               Сохранить
             </button>
           </>
@@ -859,7 +859,7 @@ const TrackPage = () => {
                 )
               }
             />
-            <button className="btn-primary" onClick={saveActivity}>
+            <button className="btn-primary w-full" onClick={saveActivity}>
               Сохранить
             </button>
           </>
@@ -907,15 +907,19 @@ const TrackPage = () => {
                 )
               }
             />
-            <label className="text-sm font-semibold text-slate-600">Правило применено</label>
-            <button
-              className="btn-secondary"
-              onClick={() =>
-                setSmokingDraft(prev => (prev ? { ...prev, ruleApplied: !prev.ruleApplied } : prev))
-              }
-            >
-              {smokingDraft.ruleApplied ? 'Да' : 'Нет'}
-            </button>
+            <label className="flex items-center gap-3 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                className="h-5 w-5"
+                checked={smokingDraft.ruleApplied}
+                onChange={event =>
+                  setSmokingDraft(prev =>
+                    prev ? { ...prev, ruleApplied: event.target.checked } : prev
+                  )
+                }
+              />
+              Правило применено
+            </label>
             <label className="text-sm font-semibold text-slate-600">Дата и время</label>
             <input
               type="datetime-local"
@@ -927,7 +931,7 @@ const TrackPage = () => {
                 )
               }
             />
-            <button className="btn-primary" onClick={saveSmoking}>
+            <button className="btn-primary w-full" onClick={saveSmoking}>
               Сохранить
             </button>
           </>
@@ -963,7 +967,7 @@ const TrackPage = () => {
                 )
               }
             />
-            <button className="btn-primary" onClick={saveWeight}>
+            <button className="btn-primary w-full" onClick={saveWeight}>
               Сохранить
             </button>
           </>
@@ -997,7 +1001,7 @@ const TrackPage = () => {
                 setWaistDraft(prev => (prev ? { ...prev, date: event.target.value } : prev))
               }
             />
-            <button className="btn-primary" onClick={saveWaist}>
+            <button className="btn-primary w-full" onClick={saveWaist}>
               Сохранить
             </button>
           </>
@@ -1029,16 +1033,20 @@ const TrackPage = () => {
                 setSleepDraft(prev => (prev ? { ...prev, wakeTime: event.target.value } : prev))
               }
             />
-            <label className="text-sm font-semibold text-slate-600">Якорь выполнен</label>
-            <button
-              className="btn-secondary"
-              onClick={() =>
-                setSleepDraft(prev => (prev ? { ...prev, anchorMet: !prev.anchorMet } : prev))
-              }
-            >
-              {sleepDraft.anchorMet ? 'Да' : 'Нет'}
-            </button>
-            <button className="btn-primary" onClick={saveSleep}>
+            <label className="flex items-center gap-3 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                className="h-5 w-5"
+                checked={sleepDraft.anchorMet}
+                onChange={event =>
+                  setSleepDraft(prev =>
+                    prev ? { ...prev, anchorMet: event.target.checked } : prev
+                  )
+                }
+              />
+              Якорь выполнен
+            </label>
+            <button className="btn-primary w-full" onClick={saveSleep}>
               Сохранить
             </button>
           </>

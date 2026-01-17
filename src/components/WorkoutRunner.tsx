@@ -150,12 +150,12 @@ export const WorkoutRunner = ({ protocol, exercises, onClose, onComplete }: Work
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-2">
-        <button className="btn-secondary" onClick={prevStep} disabled={stepIndex === 0}>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <button className="btn-secondary w-full" onClick={prevStep} disabled={stepIndex === 0}>
           Назад
         </button>
         <button
-          className="btn-secondary"
+          className="btn-secondary w-full"
           onClick={nextStep}
           disabled={stepIndex === protocol.steps.length - 1}
         >
@@ -163,12 +163,12 @@ export const WorkoutRunner = ({ protocol, exercises, onClose, onComplete }: Work
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <button className="btn-primary" onClick={() => setRunning(prev => !prev)}>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <button className="btn-primary w-full" onClick={() => setRunning(prev => !prev)}>
           {running ? 'Пауза' : 'Старт'}
         </button>
         <button
-          className="btn-secondary"
+          className="btn-secondary w-full"
           onClick={() => {
             onComplete();
             onClose();

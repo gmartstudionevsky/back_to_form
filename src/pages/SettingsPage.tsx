@@ -106,11 +106,11 @@ const SettingsPage = () => {
 
       <div className="card p-4 space-y-3">
         <h2 className="section-title">Экспорт / импорт</h2>
-        <button className="btn-primary" onClick={exportJson}>
+        <button className="btn-primary w-full" onClick={exportJson}>
           Экспорт JSON
         </button>
         <input type="file" accept="application/json" className="input" onChange={importJson} />
-        <button className="btn-secondary" onClick={exportCsv}>
+        <button className="btn-secondary w-full" onClick={exportCsv}>
           Экспорт CSV summary
         </button>
         <p className="text-xs text-slate-500">Фото в JSON не включаются.</p>
@@ -118,7 +118,7 @@ const SettingsPage = () => {
 
       <div className="card p-4">
         <h2 className="section-title">Сброс</h2>
-        <button className="btn-secondary mt-3" onClick={resetData}>
+        <button className="btn-secondary mt-3 w-full" onClick={resetData}>
           Сбросить все данные
         </button>
       </div>

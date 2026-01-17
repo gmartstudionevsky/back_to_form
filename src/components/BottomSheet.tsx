@@ -17,14 +17,14 @@ export const BottomSheet = ({ open, title, onClose, children }: BottomSheetProps
         onClick={onClose}
         aria-label="Закрыть"
       />
-      <div className="relative max-h-[80vh] rounded-t-3xl bg-white p-5 shadow-xl">
-        <div className="mb-3 flex items-center justify-between">
+      <div className="relative flex max-h-[85vh] flex-col rounded-t-3xl bg-white p-5 shadow-xl safe-bottom">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <h3 className="text-lg font-semibold">{title}</h3>
           <button className="btn-secondary" onClick={onClose}>
             Закрыть
           </button>
         </div>
-        <div className="space-y-3 overflow-y-auto pb-6">{children}</div>
+        <div className="flex-1 space-y-3 overflow-y-auto pb-6 pr-1">{children}</div>
       </div>
     </div>
   );
