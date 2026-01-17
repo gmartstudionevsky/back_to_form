@@ -57,6 +57,22 @@ const mealComponentPortions: Record<MealComponentType, string[]> = {
 
 const TodayPage = () => {
   const navigate = useNavigate();
+  const {
+    data,
+    addFoodEntry,
+    addTrainingLog,
+    addMovementSessionLog,
+    updateMovementSessionLog,
+    deleteMovementSessionLog,
+    setMovementDayLog,
+    addSmokingLog,
+    addDrinkLog,
+    addWeightLog,
+    addWaistLog,
+    addPhotoMeta,
+    updateData,
+    createOrGetDayPlan
+  } = useAppStore();
   const [selectedDate, setSelectedDate] = useState(todayISO());
   const [sheet, setSheet] = useState<
     | 'food'
@@ -125,23 +141,6 @@ const TodayPage = () => {
   });
   const [weightForm, setWeightForm] = useState({ weightKg: 72, time: '' });
   const [waistForm, setWaistForm] = useState({ waistCm: 80 });
-
-  const {
-    data,
-    addFoodEntry,
-    addTrainingLog,
-    addMovementSessionLog,
-    updateMovementSessionLog,
-    deleteMovementSessionLog,
-    setMovementDayLog,
-    addSmokingLog,
-    addDrinkLog,
-    addWeightLog,
-    addWaistLog,
-    addPhotoMeta,
-    updateData,
-    createOrGetDayPlan
-  } = useAppStore();
 
   const dayPlan = data.planner.dayPlans.find(plan => plan.date === selectedDate);
   const foodDay = data.logs.foodDays.find(day => day.date === selectedDate);
