@@ -365,7 +365,7 @@ const LibraryPage = () => {
             {((detailItem as any).portionPresets ?? []).length > 0 ? (
               <div>
               <p className="text-xs font-semibold uppercase text-slate-400">Шаблоны</p>
-                <div className="mt-2 flex flex-wrap gap-2">
+                <div className="control-row mt-2">
                   {(detailItem as any).portionPresets.map((preset: any) => (
                     <span key={preset.label} className="badge">
                       {preset.label} · {preset.grams} г

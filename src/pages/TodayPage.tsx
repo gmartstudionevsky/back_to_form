@@ -391,7 +391,7 @@ const TodayPage = () => {
           <button className="btn-secondary" onClick={() => setSheet('date')}>
             {formatDate(selectedDate)}
           </button>
-          <div className="flex flex-wrap gap-2 text-xs">
+          <div className="control-row text-xs">
             <button className="btn-secondary" onClick={() => scrollToSection('schedule')}>
               План дня
             </button>
@@ -451,7 +451,7 @@ const TodayPage = () => {
       <div className="card p-4 space-y-3" id="schedule">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="section-title">План дня</h2>
-          <div className="flex flex-wrap gap-2">
+          <div className="control-row">
             <button className="btn-secondary" onClick={() => setSheet('food')}>
               Добавить питание
             </button>
@@ -524,7 +524,7 @@ const TodayPage = () => {
                                 onChange={event => updateWorkoutTime(item.id, event.target.value)}
                               />
                             </label>
-                            <div className="flex flex-wrap gap-2">
+                            <div className="control-row">
                               {!item.completed ? (
                                 isMovement ? (
                                   <button
@@ -801,7 +801,7 @@ const TodayPage = () => {
                     Состав приема пищи
                   </p>
                   {mealComponents[meal].length ? (
-                    <div className="flex flex-wrap gap-2 text-xs">
+                    <div className="control-row text-xs">
                       {mealComponents[meal].map(component => {
                         const recipeName =
                           data.library.recipes.find(recipe => recipe.id === component.recipeRef)
@@ -955,7 +955,7 @@ const TodayPage = () => {
                   Добавить компонент
                 </button>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="control-row">
                 <button className="btn-secondary" onClick={() => applyMealTemplate(mealEdit)}>
                   Шаблон приема
                 </button>
@@ -1125,7 +1125,7 @@ const TodayPage = () => {
                 setFoodForm(prev => ({ ...prev, grams: Number(event.target.value) }))
               }
             />
-            <div className="flex flex-wrap gap-2">
+            <div className="control-row">
               {data.library.products
                 .find(product => product.id === foodForm.refId)
                 ?.portionPresets?.map(preset => (

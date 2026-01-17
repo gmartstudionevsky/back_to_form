@@ -26,11 +26,11 @@ body {
 }
 
 .btn-primary {
-  @apply min-h-[44px] rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white shadow-sm transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30 active:bg-slate-950 disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex min-h-[44px] max-w-full min-w-0 items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-center font-semibold text-white shadow-sm transition break-words whitespace-normal hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30 active:bg-slate-950 disabled:cursor-not-allowed disabled:opacity-50;
 }
 
 .btn-secondary {
-  @apply min-h-[44px] rounded-xl border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-900 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20 active:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex min-h-[44px] max-w-full min-w-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-center font-semibold text-slate-900 shadow-sm transition break-words whitespace-normal hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/20 active:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50;
 }
 
 .input {
@@ -39,6 +39,14 @@ body {
 
 .badge {
   @apply inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600;
+}
+
+.control-row {
+  @apply flex flex-wrap items-stretch gap-2;
+}
+
+.control-row > * {
+  min-width: 0;
 }
 
 button {

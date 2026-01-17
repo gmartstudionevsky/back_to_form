@@ -181,7 +181,7 @@ const PlanPage = () => {
     <section className="space-y-4">
       <header className="space-y-2">
         <h1 className="text-2xl font-bold">План</h1>
-        <div className="flex flex-wrap gap-2">
+        <div className="control-row">
           {tabs.map(tab => (
             <button
               key={tab}
