@@ -506,6 +506,58 @@ const TodayPage = () => {
         </div>
       </div>
 
+      <div className="card p-4 space-y-3" id="schedule">
+        <h2 className="section-title">Расписание дня</h2>
+        <div className="space-y-4">
+          {(Object.keys(timeLabels) as WorkoutPlanItem['timeOfDay'][]).map(timeOfDay => {
+            const meals = scheduleMeals.filter(item => item.timeOfDay === timeOfDay);
+            const workouts = scheduleWorkouts.filter(item => item.timeOfDay === timeOfDay);
+            if (meals.length === 0 && workouts.length === 0) return null;
+            return (
+              <div key={timeOfDay} className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  {timeLabels[timeOfDay]}
+                </p>
+                <div className="space-y-2">
+                  {workouts.map(item => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between rounded-2xl border border-slate-200 p-3 text-sm"
+                    >
+                      <div>
+                        <p className="font-semibold">{item.title}</p>
+                        <p className="text-xs text-slate-500">Активность</p>
+                      </div>
+                      {item.completed ? <span className="badge">Выполнено</span> : null}
+                    </div>
+                  ))}
+                  {meals.map(item => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between rounded-2xl border border-slate-200 p-3 text-sm"
+                    >
+                      <div>
+                        <p className="font-semibold">{item.title}</p>
+                        <p className="text-xs text-slate-500">
+                          {mealLabels[item.meal]}
+                          {item.time ? ` · ${item.time}` : ''}
+                        </p>
+                      </div>
+                      {item.completed ? <span className="badge">Учтено</span> : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          {!scheduleMeals.length && !scheduleWorkouts.length ? (
+            <p className="text-sm text-slate-500">
+              Пока нет расписания. Добавьте питание и активность или создайте план.
+            </p>
+          ) : null}
+        </div>
+      </div>
+
       {dayPlan ? (
         <>
           <div className="card p-4 space-y-3" id="activity-plan">
