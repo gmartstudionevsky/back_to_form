@@ -11,8 +11,8 @@ import MorePage from './pages/MorePage';
 
 const App = () => {
   return (
-    <div className="min-h-screen bg-slate-50 pb-28">
-      <div className="mx-auto max-w-md px-4 pt-5">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-slate-50 to-slate-100/40 pb-28 text-slate-900">
+      <div className="mx-auto w-full max-w-3xl px-4 pb-10 pt-6 sm:px-6 lg:px-8">
         <Routes>
           <Route path="/" element={<TodayPage />} />
           <Route path="/plan" element={<PlanPage />} />
