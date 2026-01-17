@@ -409,38 +409,59 @@ const TodayPage = () => {
   return (
     <section className="space-y-4">
       <header className="sticky top-0 z-10 -mx-4 bg-slate-50 px-4 pb-3 pt-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <button className="btn-secondary" onClick={() => setSheet('date')}>
             {formatDate(selectedDate)}
           </button>
-          <div className="control-row text-xs">
-            <button className="btn-secondary" onClick={() => scrollToSection('schedule')}>
+          <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
+            <button
+              className="btn-secondary w-full min-h-[36px] px-3 py-2 text-xs"
+              onClick={() => scrollToSection('schedule')}
+            >
               План дня
             </button>
             {dayPlan ? (
-              <button className="btn-secondary" onClick={() => scrollToSection('meal-plan')}>
+              <button
+                className="btn-secondary w-full min-h-[36px] px-3 py-2 text-xs"
+                onClick={() => scrollToSection('meal-plan')}
+              >
                 Питание
               </button>
             ) : null}
             {dayPlan ? (
               <>
-                <button className="btn-secondary" onClick={() => scrollToSection('training-plan')}>
+                <button
+                  className="btn-secondary w-full min-h-[36px] px-3 py-2 text-xs"
+                  onClick={() => scrollToSection('training-plan')}
+                >
                   Тренировки
                 </button>
-                <button className="btn-secondary" onClick={() => scrollToSection('movement-plan')}>
+                <button
+                  className="btn-secondary w-full min-h-[36px] px-3 py-2 text-xs"
+                  onClick={() => scrollToSection('movement-plan')}
+                >
                   Движение
                 </button>
               </>
             ) : null}
-            <button className="btn-secondary" onClick={() => scrollToSection('smoking')}>
+            <button
+              className="btn-secondary w-full min-h-[36px] px-3 py-2 text-xs"
+              onClick={() => scrollToSection('smoking')}
+            >
               Курение
             </button>
-            <button className="btn-secondary" onClick={() => scrollToSection('water')}>
+            <button
+              className="btn-secondary w-full min-h-[36px] px-3 py-2 text-xs"
+              onClick={() => scrollToSection('water')}
+            >
               Вода
             </button>
             {requirements &&
             (requirements.requireWeight || requirements.requireWaist || requiredPhotos.length > 0) ? (
-              <button className="btn-secondary" onClick={() => scrollToSection('measurements')}>
+              <button
+                className="btn-secondary w-full min-h-[36px] px-3 py-2 text-xs"
+                onClick={() => scrollToSection('measurements')}
+              >
                 Измерения
               </button>
             ) : null}
