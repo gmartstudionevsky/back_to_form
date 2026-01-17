@@ -56,6 +56,12 @@ export const loadData = (): AppData => {
             dinner: [],
             snack: []
           },
+          mealComponents: plan.mealComponents ?? {
+            breakfast: [],
+            lunch: [],
+            dinner: [],
+            snack: []
+          },
           workoutsPlan: plan.workoutsPlan ?? [],
           requirements: plan.requirements ?? {
             requireWeight: false,
@@ -63,6 +69,71 @@ export const loadData = (): AppData => {
             requirePhotos: []
           }
         }));
+      }
+      if (!parsed.schemaVersion || parsed.schemaVersion < 4) {
+        migrated.logs.water = parsed.logs?.water ?? [];
+        migrated.planner.dayPlans = (parsed.planner?.dayPlans ?? []).map(plan => ({
+          ...plan,
+          mealComponents: plan.mealComponents ?? {
+            breakfast: [],
+            lunch: [],
+            dinner: [],
+            snack: []
+          }
+        }));
+      }
+      if (!parsed.schemaVersion || parsed.schemaVersion < 5) {
+        const drinks = parsed.logs?.drinks ?? [];
+        migrated.logs.drinks =
+          drinks.length > 0
+            ? drinks
+            : (parsed.logs?.water ?? []).map(log => ({
+                id: log.id,
+                dateTime: log.dateTime,
+                drinkId: 'drink-water',
+                portionLabel: `${log.amountMl} мл`,
+                portionMl: log.amountMl,
+                portionsCount: 1
+              }));
+        migrated.planner.dayPlans = (parsed.planner?.dayPlans ?? []).map(plan => {
+          const mealsPlan = plan.mealsPlan ?? {
+            breakfast: [],
+            lunch: [],
+            dinner: [],
+            snack: []
+          };
+          const mealComponents = plan.mealComponents ?? {
+            breakfast: [],
+            lunch: [],
+            dinner: [],
+            snack: []
+          };
+          const withComponents = (meal: keyof typeof mealsPlan) =>
+            mealComponents[meal].length > 0
+              ? mealComponents[meal]
+              : mealsPlan[meal].map(item => ({
+                  id: item.id,
+                  type: meal === 'snack' ? 'snack' : 'main',
+                  recipeRef: item.kind === 'dish' ? item.refId : undefined,
+                  portion: '1 порция',
+                  extra: false
+                }));
+          return {
+            ...plan,
+            mealComponents: {
+              breakfast: withComponents('breakfast'),
+              lunch: withComponents('lunch'),
+              dinner: withComponents('dinner'),
+              snack: withComponents('snack')
+            },
+            mealTimes: plan.mealTimes ?? {
+              breakfast: mealsPlan.breakfast[0]?.plannedTime ?? '',
+              lunch: mealsPlan.lunch[0]?.plannedTime ?? '',
+              dinner: mealsPlan.dinner[0]?.plannedTime ?? '',
+              snack: mealsPlan.snack[0]?.plannedTime ?? ''
+            }
+          };
+        });
       }
       return migrated;
     }
