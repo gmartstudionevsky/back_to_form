@@ -101,6 +101,18 @@ export type DayPlan = {
     dinner: MealPlanItem[];
     snack: MealPlanItem[];
   };
+  mealComponents?: {
+    breakfast: MealComponent[];
+    lunch: MealComponent[];
+    dinner: MealComponent[];
+    snack: MealComponent[];
+  };
+  mealTimes?: {
+    breakfast?: string;
+    lunch?: string;
+    dinner?: string;
+    snack?: string;
+  };
   workoutsPlan: WorkoutPlanItem[];
   requirements: {
     requireWeight: boolean;
@@ -139,6 +151,24 @@ export type MealPlanItem = {
   completed?: boolean;
 };
 
+export type MealComponentType =
+  | 'main'
+  | 'side'
+  | 'salad'
+  | 'soup'
+  | 'drink'
+  | 'dessert'
+  | 'snack';
+
+export type MealComponent = {
+  id: UUID;
+  type: MealComponentType;
+  recipeRef?: UUID;
+  portion: string;
+  extra?: boolean;
+  notes?: string;
+};
+
 export type WorkoutPlanItem = {
   id: UUID;
   timeOfDay: 'morning' | 'day' | 'evening';
@@ -174,6 +204,33 @@ export type SmokingLog = {
   ruleApplied?: boolean;
 };
 
+export type WaterLog = {
+  id: UUID;
+  dateTime: string;
+  amountMl: number;
+};
+
+export type DrinkPortion = {
+  label: string;
+  ml: number;
+};
+
+export type Drink = {
+  id: UUID;
+  name: string;
+  hydrationFactor: number;
+  portions: DrinkPortion[];
+};
+
+export type DrinkLog = {
+  id: UUID;
+  dateTime: string;
+  drinkId: UUID;
+  portionLabel: string;
+  portionMl: number;
+  portionsCount: number;
+};
+
 export type WeightLog = {
   id: UUID;
   dateTime: string;
@@ -207,6 +264,7 @@ export type LibraryState = {
   protocols: Protocol[];
   products: Product[];
   recipes: Recipe[];
+  drinks: Drink[];
   rules: Rule[];
   taskTemplates: TaskTemplate[];
 };
@@ -220,6 +278,8 @@ export type LogsState = {
   foodDays: FoodLogDay[];
   activity: ActivityLog[];
   smoking: SmokingLog[];
+  water: WaterLog[];
+  drinks: DrinkLog[];
   weight: WeightLog[];
   waist: WaistLog[];
   sleep: SleepLog[];

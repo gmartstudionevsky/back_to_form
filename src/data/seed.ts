@@ -1,6 +1,6 @@
 import { AppData } from '../types';
 
-export const schemaVersion = 3;
+export const schemaVersion = 5;
 
 export const seedData: AppData = {
   schemaVersion,
@@ -413,6 +413,36 @@ export const seedData: AppData = {
         category: 'breakfast'
       }
     ],
+    drinks: [
+      {
+        id: 'drink-water',
+        name: 'Вода',
+        hydrationFactor: 1,
+        portions: [
+          { label: 'Стакан 250 мл', ml: 250 },
+          { label: 'Бутылка 500 мл', ml: 500 },
+          { label: 'Бутылка 750 мл', ml: 750 }
+        ]
+      },
+      {
+        id: 'drink-tea',
+        name: 'Чай',
+        hydrationFactor: 0.9,
+        portions: [
+          { label: 'Чашка 200 мл', ml: 200 },
+          { label: 'Кружка 300 мл', ml: 300 }
+        ]
+      },
+      {
+        id: 'drink-coffee',
+        name: 'Кофе',
+        hydrationFactor: 0.8,
+        portions: [
+          { label: 'Эспрессо 60 мл', ml: 60 },
+          { label: 'Кружка 200 мл', ml: 200 }
+        ]
+      }
+    ],
     rules: [
       {
         id: 'rule-no-delivery',
@@ -732,6 +762,8 @@ export const seedData: AppData = {
     foodDays: [],
     activity: [],
     smoking: [],
+    water: [],
+    drinks: [],
     weight: [],
     waist: [],
     sleep: [],

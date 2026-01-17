@@ -3,9 +3,11 @@ import {
   ActivityLog,
   AppData,
   DayPlan,
+  DrinkLog,
   FoodEntry,
   PhotoMeta,
   SmokingLog,
+  WaterLog,
   TaskInstance,
   WaistLog,
   WeightLog,
@@ -28,6 +30,12 @@ type AppState = {
   addSmokingLog: (log: SmokingLog) => void;
   updateSmokingLog: (log: SmokingLog) => void;
   deleteSmokingLog: (id: string) => void;
+  addDrinkLog: (log: DrinkLog) => void;
+  updateDrinkLog: (log: DrinkLog) => void;
+  deleteDrinkLog: (id: string) => void;
+  addWaterLog: (log: WaterLog) => void;
+  updateWaterLog: (log: WaterLog) => void;
+  deleteWaterLog: (id: string) => void;
   addWeightLog: (log: WeightLog) => void;
   updateWeightLog: (log: WeightLog) => void;
   deleteWeightLog: (id: string) => void;
@@ -124,6 +132,42 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { ...data };
     });
   },
+  addDrinkLog: log => {
+    get().updateData(data => {
+      data.logs.drinks.push({ ...log, id: createId() });
+      return { ...data };
+    });
+  },
+  updateDrinkLog: log => {
+    get().updateData(data => {
+      data.logs.drinks = data.logs.drinks.map(item => (item.id === log.id ? log : item));
+      return { ...data };
+    });
+  },
+  deleteDrinkLog: id => {
+    get().updateData(data => {
+      data.logs.drinks = data.logs.drinks.filter(item => item.id !== id);
+      return { ...data };
+    });
+  },
+  addWaterLog: log => {
+    get().updateData(data => {
+      data.logs.water.push({ ...log, id: createId() });
+      return { ...data };
+    });
+  },
+  updateWaterLog: log => {
+    get().updateData(data => {
+      data.logs.water = data.logs.water.map(item => (item.id === log.id ? log : item));
+      return { ...data };
+    });
+  },
+  deleteWaterLog: id => {
+    get().updateData(data => {
+      data.logs.water = data.logs.water.filter(item => item.id !== id);
+      return { ...data };
+    });
+  },
   addWeightLog: log => {
     get().updateData(data => {
       data.logs.weight.push({ ...log, id: createId() });
@@ -187,6 +231,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         periodId,
         tasks: [],
         mealsPlan: { breakfast: [], lunch: [], dinner: [], snack: [] },
+        mealComponents: { breakfast: [], lunch: [], dinner: [], snack: [] },
+        mealTimes: { breakfast: '', lunch: '', dinner: '', snack: '' },
         workoutsPlan: [],
         requirements: { requireWeight: false, requireWaist: false, requirePhotos: [] }
       };
@@ -199,6 +245,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         const existing = data.planner.dayPlans.find(item => item.date === date);
         if (!existing) return { ...data };
         existing.mealsPlan ??= { breakfast: [], lunch: [], dinner: [], snack: [] };
+        existing.mealComponents ??= { breakfast: [], lunch: [], dinner: [], snack: [] };
+        existing.mealTimes ??= { breakfast: '', lunch: '', dinner: '', snack: '' };
         existing.workoutsPlan ??= [];
         existing.requirements ??= { requireWeight: false, requireWaist: false, requirePhotos: [] };
         existing.tasks ??= [];
