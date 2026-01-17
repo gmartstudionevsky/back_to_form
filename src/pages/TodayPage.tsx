@@ -413,7 +413,7 @@ const TodayPage = () => {
           <button className="btn-secondary" onClick={() => setSheet('date')}>
             {formatDate(selectedDate)}
           </button>
-          <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid auto-cols-[minmax(96px,1fr)] grid-flow-col gap-2 overflow-x-auto pb-1 text-xs sm:grid-cols-3 sm:grid-flow-row sm:auto-cols-auto sm:overflow-visible lg:grid-cols-6">
             <button
               className="btn-secondary w-full min-h-[36px] px-3 py-2 text-xs"
               onClick={() => scrollToSection('schedule')}
