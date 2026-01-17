@@ -4,9 +4,17 @@ import { useAppStore } from '../store/useAppStore';
 import { todayISO } from '../utils/date';
 import { calcRecipeNutrition } from '../utils/nutrition';
 import { savePhotoBlob } from '../storage/photoDb';
-import { Exercise, FoodEntry, Recipe, TaskTemplate } from '../types';
+import { Exercise, FoodEntry, Recipe, TaskTemplate, MovementActivity } from '../types';
 
-const tabs = ['Упражнения', 'Протоколы', 'Продукты', 'Блюда', 'Шаблоны', 'Правила'] as const;
+const tabs = [
+  'Упражнения',
+  'Протоколы',
+  'Продукты',
+  'Блюда',
+  'Шаблоны',
+  'Правила',
+  'Движение'
+] as const;
 
 type LibraryTab = (typeof tabs)[number];
 
@@ -29,7 +37,10 @@ const LibraryPage = () => {
   const [detailItem, setDetailItem] = useState<unknown | null>(null);
   const [foodSheet, setFoodSheet] = useState<FoodSheetItem | null>(null);
   const [taskSheet, setTaskSheet] = useState<TaskTemplate | null>(null);
-  const [createSheet, setCreateSheet] = useState<'dish' | 'product' | 'exercise' | null>(null);
+  const [createSheet, setCreateSheet] = useState<
+    'dish' | 'product' | 'exercise' | 'movement'
+    | null
+  >(null);
   const [exerciseMedia, setExerciseMedia] = useState({
     youtubeUrl: '',
     file: null as File | null
@@ -57,6 +68,10 @@ const LibraryPage = () => {
     name: '',
     tags: '',
     steps: ''
+  });
+  const [newMovementActivity, setNewMovementActivity] = useState({
+    name: '',
+    kind: 'march' as MovementActivity['kind']
   });
   const [taskDate, setTaskDate] = useState(todayISO());
 
@@ -86,6 +101,8 @@ const LibraryPage = () => {
         return data.library.taskTemplates.filter(item => match(item.title));
       case 'Правила':
         return data.library.rules.filter(item => match(item.name));
+      case 'Движение':
+        return data.library.movementActivities.filter(item => match(item.name));
       default:
         return [];
     }
@@ -140,6 +157,9 @@ const LibraryPage = () => {
           <button className="btn-secondary w-full sm:w-auto" onClick={() => setCreateSheet('exercise')}>
             + Новое упражнение
           </button>
+          <button className="btn-secondary w-full sm:w-auto" onClick={() => setCreateSheet('movement')}>
+            + Новое движение
+          </button>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1">
           {tabs.map(tab => (
@@ -171,6 +191,9 @@ const LibraryPage = () => {
                   <p className="text-xs text-slate-500">
                     Категория: {(item as Recipe).category}
                   </p>
+                ) : null}
+                {active === 'Движение' && 'kind' in item ? (
+                  <p className="text-xs text-slate-500">Тип: {(item as MovementActivity).kind}</p>
                 ) : null}
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
@@ -377,6 +400,12 @@ const LibraryPage = () => {
           </div>
         ) : null}
 
+        {detailItem && active === 'Движение' && 'kind' in (detailItem as MovementActivity) ? (
+          <div className="space-y-2 text-sm text-slate-600">
+            <p>Тип активности: {(detailItem as MovementActivity).kind}</p>
+          </div>
+        ) : null}
+
         {detailItem && 'text' in (detailItem as any) && !('steps' in (detailItem as any)) ? (
           <p className="text-sm text-slate-600">{(detailItem as any).text}</p>
         ) : null}
@@ -498,6 +527,8 @@ const LibraryPage = () => {
             ? 'Новое блюдо'
             : createSheet === 'product'
             ? 'Новый продукт'
+            : createSheet === 'movement'
+            ? 'Новое движение'
             : 'Новое упражнение'
         }
         onClose={() => setCreateSheet(null)}
@@ -684,6 +715,52 @@ const LibraryPage = () => {
               }}
             >
               Создать упражнение
+            </button>
+          </div>
+        ) : null}
+
+        {createSheet === 'movement' ? (
+          <div className="space-y-3">
+            <input
+              className="input"
+              placeholder="Название"
+              value={newMovementActivity.name}
+              onChange={event =>
+                setNewMovementActivity(prev => ({ ...prev, name: event.target.value }))
+              }
+            />
+            <label className="text-sm font-semibold text-slate-600">Тип</label>
+            <select
+              className="input"
+              value={newMovementActivity.kind}
+              onChange={event =>
+                setNewMovementActivity(prev => ({
+                  ...prev,
+                  kind: event.target.value as MovementActivity['kind']
+                }))
+              }
+            >
+              <option value="run">Бег</option>
+              <option value="march">Ходьба на месте</option>
+              <option value="stairs">Ходьба по лестницам</option>
+            </select>
+            <button
+              className="btn-primary w-full"
+              onClick={() => {
+                if (!newMovementActivity.name) return;
+                updateData(state => {
+                  state.library.movementActivities.push({
+                    id: crypto.randomUUID(),
+                    name: newMovementActivity.name,
+                    kind: newMovementActivity.kind
+                  });
+                  return { ...state };
+                });
+                setNewMovementActivity({ name: '', kind: 'march' });
+                setCreateSheet(null);
+              }}
+            >
+              Создать движение
             </button>
           </div>
         ) : null}

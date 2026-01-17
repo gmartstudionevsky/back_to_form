@@ -1,4 +1,4 @@
-import { AppData } from '../types';
+import { AppData, MovementActivity } from '../types';
 import { seedData, schemaVersion } from '../data/seed';
 
 const STORAGE_KEY = 'btf-data';
@@ -134,6 +134,31 @@ export const loadData = (): AppData => {
             }
           };
         });
+      }
+      if (!parsed.schemaVersion || parsed.schemaVersion < 6) {
+        const existingActivities = (parsed.library as AppData['library'])?.movementActivities ?? [];
+        const fallbackActivities: MovementActivity[] = [
+          { id: 'move-run', name: 'Бег', kind: 'run' },
+          { id: 'move-march', name: 'Ходьба на месте', kind: 'march' },
+          { id: 'move-stairs', name: 'Ходьба по лестницам', kind: 'stairs' }
+        ];
+        const movementActivities =
+          existingActivities.length > 0 ? existingActivities : fallbackActivities;
+        migrated.library.movementActivities = movementActivities;
+        const legacyActivity = (parsed.logs as any)?.activity ?? [];
+        const training = legacyActivity.filter(log => log.type === 'workout');
+        const movementSessions = legacyActivity
+          .filter(log => log.type !== 'workout')
+          .map(log => ({
+            id: log.id,
+            dateTime: log.dateTime,
+            activityRef: log.type === 'stairs' ? 'move-stairs' : 'move-march',
+            durationMinutes: log.minutes,
+            plannedFlights: log.type === 'stairs' ? log.blocks ?? 0 : undefined
+          }));
+        migrated.logs.training = training;
+        migrated.logs.movementSessions = movementSessions;
+        migrated.logs.movementDays = parsed.logs?.movementDays ?? [];
       }
       return migrated;
     }

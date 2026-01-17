@@ -1,6 +1,6 @@
 import { AppData } from '../types';
 
-export const schemaVersion = 5;
+export const schemaVersion = 6;
 
 export const seedData: AppData = {
   schemaVersion,
@@ -463,6 +463,11 @@ export const seedData: AppData = {
         tags: ['курение']
       }
     ],
+    movementActivities: [
+      { id: 'move-run', name: 'Бег', kind: 'run' },
+      { id: 'move-march', name: 'Ходьба на месте', kind: 'march' },
+      { id: 'move-stairs', name: 'Ходьба по лестницам', kind: 'stairs' }
+    ],
     taskTemplates: [
       {
         id: 'tpl-warmup',
@@ -760,7 +765,9 @@ export const seedData: AppData = {
   },
   logs: {
     foodDays: [],
-    activity: [],
+    training: [],
+    movementSessions: [],
+    movementDays: [],
     smoking: [],
     water: [],
     drinks: [],

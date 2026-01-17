@@ -79,6 +79,8 @@ export type Period = {
   notes?: string;
 };
 
+export type TimeOfDay = 'morning' | 'day' | 'evening';
+
 export type TaskInstance = {
   id: UUID;
   templateRef: UUID;
@@ -86,7 +88,7 @@ export type TaskInstance = {
   assignedRefs?: { kind: 'protocol' | 'exercise' | 'recipe' | 'rule' | 'product'; refId: UUID }[];
   target?: Record<string, number | string>;
   actual?: Record<string, number | string>;
-  timeOfDay?: 'morning' | 'day' | 'evening';
+  timeOfDay?: TimeOfDay;
   notes?: string;
 };
 
@@ -171,7 +173,7 @@ export type MealComponent = {
 
 export type WorkoutPlanItem = {
   id: UUID;
-  timeOfDay: 'morning' | 'day' | 'evening';
+  timeOfDay: TimeOfDay;
   plannedTime?: string;
   protocolRef?: UUID;
   isRequired?: boolean;
@@ -179,6 +181,7 @@ export type WorkoutPlanItem = {
   plannedMinutes?: number;
   completedMinutes?: number;
   completed?: boolean;
+  movementActivityRef?: UUID;
   notes?: string;
 };
 
@@ -191,9 +194,40 @@ export type FoodLogDay = {
 export type ActivityLog = {
   id: UUID;
   dateTime: string;
-  type: 'stairs' | 'march' | 'workout';
+  type: 'workout';
   minutes: number;
   blocks?: number;
+  timeOfDay?: TimeOfDay;
+};
+
+export type MovementActivity = {
+  id: UUID;
+  name: string;
+  kind: 'run' | 'march' | 'stairs';
+};
+
+export type GeoPoint = {
+  lat: number;
+  lng: number;
+};
+
+export type MovementSessionLog = {
+  id: UUID;
+  dateTime: string;
+  activityRef: UUID;
+  durationMinutes: number;
+  distanceKm?: number;
+  startLocation?: GeoPoint;
+  endLocation?: GeoPoint;
+  plannedFlights?: number;
+  actualFlights?: number;
+  timeOfDay?: TimeOfDay;
+  notes?: string;
+};
+
+export type MovementDayLog = {
+  date: string;
+  steps: number;
 };
 
 export type SmokingLog = {
@@ -267,6 +301,7 @@ export type LibraryState = {
   recipes: Recipe[];
   drinks: Drink[];
   rules: Rule[];
+  movementActivities: MovementActivity[];
   taskTemplates: TaskTemplate[];
 };
 
@@ -277,7 +312,9 @@ export type PlannerState = {
 
 export type LogsState = {
   foodDays: FoodLogDay[];
-  activity: ActivityLog[];
+  training: ActivityLog[];
+  movementSessions: MovementSessionLog[];
+  movementDays: MovementDayLog[];
   smoking: SmokingLog[];
   water: WaterLog[];
   drinks: DrinkLog[];
