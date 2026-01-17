@@ -71,6 +71,7 @@ const TodayPage = () => {
   const [mealEdit, setMealEdit] = useState<FoodEntry['meal'] | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const [isNavVisible, setIsNavVisible] = useState(true);
+  const isProgrammaticScroll = useRef(false);
 
   const [foodForm, setFoodForm] = useState({
     kind: 'product' as const,
@@ -189,9 +190,13 @@ const TodayPage = () => {
   const scrollToSection = (id: string) => {
     const target = document.getElementById(id);
     if (!target) return;
+    isProgrammaticScroll.current = true;
     const headerOffset = headerRef.current?.offsetHeight ?? 0;
     const targetTop = target.getBoundingClientRect().top + window.scrollY - headerOffset - 8;
     window.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+    window.setTimeout(() => {
+      isProgrammaticScroll.current = false;
+    }, 500);
   };
 
   useEffect(() => {
@@ -201,6 +206,11 @@ const TodayPage = () => {
 
     const updateVisibility = () => {
       if (!isMobile) {
+        setIsNavVisible(true);
+        lastScrollY = window.scrollY;
+        return;
+      }
+      if (isProgrammaticScroll.current) {
         setIsNavVisible(true);
         lastScrollY = window.scrollY;
         return;
