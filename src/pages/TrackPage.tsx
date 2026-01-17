@@ -1,11 +1,21 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { BottomSheet } from '../components/BottomSheet';
 import { useAppStore } from '../store/useAppStore';
 import { calcFoodEntry, calcRecipeNutrition } from '../utils/nutrition';
 import { todayISO } from '../utils/date';
-import { ActivityLog, FoodEntry, SleepLog, SmokingLog, WaistLog, WeightLog } from '../types';
+import { getTimeOfDayFromDateTime, timeOfDayLabels } from '../utils/timeOfDay';
+import {
+  ActivityLog,
+  FoodEntry,
+  SleepLog,
+  SmokingLog,
+  WaistLog,
+  WeightLog,
+  MovementSessionLog,
+  GeoPoint
+} from '../types';
 
-const tabs = ['Питание', 'Активность', 'Курение', 'Измерения', 'Сон'] as const;
+const tabs = ['Питание', 'Тренировки', 'Движение', 'Курение', 'Измерения', 'Сон'] as const;
 
 type Tab = (typeof tabs)[number];
 
@@ -27,9 +37,13 @@ const TrackPage = () => {
     addFoodEntry,
     updateFoodEntry,
     deleteFoodEntry,
-    addActivityLog,
-    updateActivityLog,
-    deleteActivityLog,
+    addTrainingLog,
+    updateTrainingLog,
+    deleteTrainingLog,
+    addMovementSessionLog,
+    updateMovementSessionLog,
+    deleteMovementSessionLog,
+    setMovementDayLog,
     addSmokingLog,
     updateSmokingLog,
     deleteSmokingLog,
@@ -47,11 +61,24 @@ const TrackPage = () => {
   const [selectedDate, setSelectedDate] = useState(todayISO());
   const [foodSheet, setFoodSheet] = useState<FoodDraft | null>(null);
   const [foodQuery, setFoodQuery] = useState('');
-  const [activityDraft, setActivityDraft] = useState<ActivityLog | null>(null);
+  const [trainingDraft, setTrainingDraft] = useState<ActivityLog | null>(null);
+  const [movementDraft, setMovementDraft] = useState<MovementSessionLog | null>(null);
   const [smokingDraft, setSmokingDraft] = useState<SmokingLog | null>(null);
   const [weightDraft, setWeightDraft] = useState<WeightLog | null>(null);
   const [waistDraft, setWaistDraft] = useState<WaistLog | null>(null);
   const [sleepDraft, setSleepDraft] = useState<SleepLog | null>(null);
+  const [movementActivityId, setMovementActivityId] = useState(
+    data.library.movementActivities[0]?.id ?? ''
+  );
+  const [movementPlannedFlights, setMovementPlannedFlights] = useState(10);
+  const [movementSteps, setMovementSteps] = useState(0);
+  const [movementTimer, setMovementTimer] = useState({
+    running: false,
+    startedAt: 0,
+    elapsedSec: 0
+  });
+  const [movementStartLocation, setMovementStartLocation] = useState<GeoPoint | null>(null);
+  const [movementGeoStatus, setMovementGeoStatus] = useState<string | null>(null);
 
   const dayPlan = data.planner.dayPlans.find(plan => plan.date === selectedDate);
   const foodDay = data.logs.foodDays.find(day => day.date === selectedDate);
@@ -107,7 +134,7 @@ const TrackPage = () => {
       .map(meal => [meal, groups.get(meal) ?? []] as [FoodEntry['meal'], FoodEntry[]]);
   }, [foodDay]);
 
-  const activityLogs = data.logs.activity.filter(log => log.dateTime.slice(0, 10) === selectedDate);
+  const trainingLogs = data.logs.training.filter(log => log.dateTime.slice(0, 10) === selectedDate);
   const smokingLogs = data.logs.smoking.filter(log => log.dateTime.slice(0, 10) === selectedDate);
   const weightLogs = data.logs.weight.filter(log => log.dateTime.slice(0, 10) === selectedDate);
   const waistLogs = data.logs.waist.filter(log => log.date === selectedDate);
@@ -116,6 +143,71 @@ const TrackPage = () => {
   const toDateTime = (date: string, time: string) => {
     if (!time) return new Date().toISOString();
     return new Date(`${date}T${time}:00`).toISOString();
+  };
+
+  const movementDay = data.logs.movementDays.find(day => day.date === selectedDate);
+  const movementSessions = data.logs.movementSessions.filter(
+    log => log.dateTime.slice(0, 10) === selectedDate
+  );
+  const plannedMovementActivityId = dayPlan?.workoutsPlan.find(
+    item => item.kind === 'movement' && item.movementActivityRef
+  )?.movementActivityRef;
+  const defaultMovementActivityId =
+    plannedMovementActivityId ??
+    data.library.movementActivities[0]?.id ??
+    '';
+
+  useEffect(() => {
+    setMovementSteps(movementDay?.steps ?? 0);
+  }, [movementDay?.steps, selectedDate]);
+
+  useEffect(() => {
+    if (movementActivityId || !defaultMovementActivityId) return;
+    setMovementActivityId(defaultMovementActivityId);
+  }, [defaultMovementActivityId, movementActivityId]);
+
+  useEffect(() => {
+    if (!movementTimer.running) return;
+    const id = window.setInterval(() => {
+      setMovementTimer(prev => ({
+        ...prev,
+        elapsedSec: Math.floor((Date.now() - prev.startedAt) / 1000)
+      }));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [movementTimer.running]);
+
+  const requestLocation = () =>
+    new Promise<GeoPoint | null>(resolve => {
+      if (!navigator.geolocation) {
+        setMovementGeoStatus('Геолокация недоступна в этом браузере.');
+        resolve(null);
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        position => {
+          const point = { lat: position.coords.latitude, lng: position.coords.longitude };
+          setMovementGeoStatus('Геолокация обновлена.');
+          resolve(point);
+        },
+        () => {
+          setMovementGeoStatus('Не удалось получить геолокацию.');
+          resolve(null);
+        }
+      );
+    });
+
+  const calcDistanceKm = (start: GeoPoint, end: GeoPoint) => {
+    const toRad = (value: number) => (value * Math.PI) / 180;
+    const radius = 6371;
+    const dLat = toRad(end.lat - start.lat);
+    const dLon = toRad(end.lng - start.lng);
+    const lat1 = toRad(start.lat);
+    const lat2 = toRad(end.lat);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.sin(dLon / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+    return 2 * radius * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
   const openNewFood = () => {
@@ -160,27 +252,97 @@ const TrackPage = () => {
     setFoodSheet(null);
   };
 
-  const openActivity = (log?: ActivityLog) => {
-    setActivityDraft(
+  const openTraining = (log?: ActivityLog) => {
+    setTrainingDraft(
       log ?? {
         id: '',
         dateTime: toDateTime(selectedDate, ''),
-        type: 'stairs',
-        minutes: 10,
-        blocks: 1
+        type: 'workout',
+        minutes: 45,
+        timeOfDay: getTimeOfDayFromDateTime(new Date().toISOString())
       }
     );
   };
 
-  const saveActivity = () => {
-    if (!activityDraft) return;
-    const payload = { ...activityDraft };
-    if (activityDraft.id) {
-      updateActivityLog(payload);
+  const saveTraining = () => {
+    if (!trainingDraft) return;
+    const payload = {
+      ...trainingDraft,
+      timeOfDay: getTimeOfDayFromDateTime(trainingDraft.dateTime)
+    };
+    if (trainingDraft.id) {
+      updateTrainingLog(payload);
     } else {
-      addActivityLog(payload);
+      addTrainingLog(payload);
     }
-    setActivityDraft(null);
+    setTrainingDraft(null);
+  };
+
+  const openMovement = (log?: MovementSessionLog) => {
+    const activityRef = log?.activityRef ?? defaultMovementActivityId ?? '';
+    setMovementDraft(
+      log ?? {
+        id: '',
+        dateTime: toDateTime(selectedDate, ''),
+        activityRef,
+        durationMinutes: 20,
+        plannedFlights: 10,
+        timeOfDay: getTimeOfDayFromDateTime(new Date().toISOString())
+      }
+    );
+  };
+
+  const saveMovement = () => {
+    if (!movementDraft) return;
+    const payload = {
+      ...movementDraft,
+      timeOfDay: getTimeOfDayFromDateTime(movementDraft.dateTime)
+    };
+    if (movementDraft.id) {
+      updateMovementSessionLog(payload);
+    } else {
+      addMovementSessionLog(payload);
+    }
+    setMovementDraft(null);
+  };
+
+  const formatElapsed = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const startMovementSession = async () => {
+    if (!movementActivityId) return;
+    setMovementGeoStatus('Запрашиваем геолокацию…');
+    const startLocation = await requestLocation();
+    setMovementStartLocation(startLocation);
+    setMovementTimer({ running: true, startedAt: Date.now(), elapsedSec: 0 });
+  };
+
+  const stopMovementSession = async () => {
+    if (!movementTimer.running) return;
+    setMovementGeoStatus('Фиксируем завершение…');
+    const endLocation = await requestLocation();
+    const durationMinutes = Math.max(1, Math.round(movementTimer.elapsedSec / 60));
+    const distanceKm =
+      movementStartLocation && endLocation
+        ? Math.round(calcDistanceKm(movementStartLocation, endLocation) * 100) / 100
+        : undefined;
+    const activity = data.library.movementActivities.find(item => item.id === movementActivityId);
+    addMovementSessionLog({
+      id: '',
+      dateTime: new Date(movementTimer.startedAt).toISOString(),
+      activityRef: movementActivityId,
+      durationMinutes,
+      distanceKm,
+      startLocation: movementStartLocation ?? undefined,
+      endLocation: endLocation ?? undefined,
+      plannedFlights: activity?.kind === 'stairs' ? movementPlannedFlights : undefined,
+      timeOfDay: getTimeOfDayFromDateTime(new Date(movementTimer.startedAt).toISOString())
+    });
+    setMovementTimer({ running: false, startedAt: 0, elapsedSec: 0 });
+    setMovementStartLocation(null);
   };
 
   const openSmoking = (log?: SmokingLog) => {
@@ -287,10 +449,11 @@ const TrackPage = () => {
     .filter(item => item.kind === 'movement')
     .reduce((sum, item) => sum + (item.plannedMinutes ?? 0), 0);
   const completedWorkoutCount = plannedWorkouts.filter(item => item.completed).length;
-  const actualWorkoutCount = activityLogs.filter(log => log.type === 'workout').length;
-  const actualMovementMinutes = activityLogs
-    .filter(log => log.type !== 'workout')
-    .reduce((sum, log) => sum + log.minutes, 0);
+  const actualWorkoutCount = trainingLogs.length;
+  const actualMovementMinutes = movementSessions.reduce(
+    (sum, log) => sum + log.durationMinutes,
+    0
+  );
 
   return (
     <section className="space-y-4">
@@ -399,15 +562,15 @@ const TrackPage = () => {
         </div>
       )}
 
-      {active === 'Активность' && (
+      {active === 'Тренировки' && (
         <div className="space-y-3">
           <div className="card p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="section-title">
-                Итог: {activityLogs.reduce((sum, log) => sum + log.minutes, 0)} мин
+                Итог: {trainingLogs.reduce((sum, log) => sum + log.minutes, 0)} мин
               </h2>
-              <button className="btn-primary w-full sm:w-auto" onClick={() => openActivity()}>
-                Добавить
+              <button className="btn-primary w-full sm:w-auto" onClick={() => openTraining()}>
+                Добавить тренировку
               </button>
             </div>
             <p className="mt-2 text-sm text-slate-600">
@@ -419,24 +582,33 @@ const TrackPage = () => {
             </p>
           </div>
           <div className="card p-4">
-            <h3 className="text-sm font-semibold text-slate-500">Логи</h3>
+            <h3 className="text-sm font-semibold text-slate-500">Логи тренировок</h3>
             <div className="mt-2 space-y-2">
-              {activityLogs.length === 0 ? (
+              {trainingLogs.length === 0 ? (
                 <p className="text-sm text-slate-500">Записей нет.</p>
               ) : (
-                activityLogs.map(log => (
+                trainingLogs.map(log => (
                   <div key={log.id} className="rounded-xl border border-slate-200 p-3">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-sm font-semibold">
-                        {log.type} · {log.minutes} мин
-                      </p>
+                      <div>
+                        <p className="text-sm font-semibold">
+                          Тренировка · {log.minutes} мин
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {new Date(log.dateTime).toLocaleTimeString('ru-RU', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}{' '}
+                          · {timeOfDayLabels[log.timeOfDay ?? getTimeOfDayFromDateTime(log.dateTime)]}
+                        </p>
+                      </div>
                       <div className="flex flex-col gap-2 sm:flex-row">
-                        <button className="btn-secondary w-full sm:w-auto" onClick={() => openActivity(log)}>
+                        <button className="btn-secondary w-full sm:w-auto" onClick={() => openTraining(log)}>
                           Изменить
                         </button>
                         <button
                           className="btn-secondary w-full text-red-500 sm:w-auto"
-                          onClick={() => deleteActivityLog(log.id)}
+                          onClick={() => deleteTrainingLog(log.id)}
                         >
                           Удалить
                         </button>
@@ -444,6 +616,134 @@ const TrackPage = () => {
                     </div>
                   </div>
                 ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {active === 'Движение' && (
+        <div className="space-y-3">
+          <div className="card p-4 space-y-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="section-title">Шаги за день</h2>
+              <button
+                className="btn-primary w-full sm:w-auto"
+                onClick={() => setMovementDayLog({ date: selectedDate, steps: movementSteps })}
+              >
+                Сохранить шаги
+              </button>
+            </div>
+            <input
+              type="number"
+              className="input"
+              value={movementSteps}
+              onChange={event => setMovementSteps(Number(event.target.value))}
+              placeholder="Количество шагов"
+            />
+            <p className="text-xs text-slate-500">
+              Введите итоговое количество шагов за день.
+            </p>
+          </div>
+
+          <div className="card p-4 space-y-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="text-sm font-semibold text-slate-500">Запуск движения</h3>
+              <button className="btn-secondary w-full sm:w-auto" onClick={() => openMovement()}>
+                Добавить вручную
+              </button>
+            </div>
+            <label className="text-xs text-slate-500">
+              Активность
+              <select
+                className="input mt-1"
+                value={movementActivityId}
+                onChange={event => setMovementActivityId(event.target.value)}
+              >
+                {data.library.movementActivities.map(activity => (
+                  <option key={activity.id} value={activity.id}>
+                    {activity.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {data.library.movementActivities.find(item => item.id === movementActivityId)?.kind ===
+            'stairs' ? (
+              <label className="text-xs text-slate-500">
+                План пролетов
+                <input
+                  type="number"
+                  className="input mt-1"
+                  value={movementPlannedFlights}
+                  onChange={event => setMovementPlannedFlights(Number(event.target.value))}
+                />
+              </label>
+            ) : null}
+            <div className="rounded-2xl border border-slate-200 p-3 text-sm">
+              <p className="font-semibold">Таймер</p>
+              <p className="text-xs text-slate-500">Время: {formatElapsed(movementTimer.elapsedSec)}</p>
+              {movementGeoStatus ? (
+                <p className="text-xs text-slate-400">Геолокация: {movementGeoStatus}</p>
+              ) : null}
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                {!movementTimer.running ? (
+                  <button className="btn-primary w-full sm:w-auto" onClick={startMovementSession}>
+                    Старт
+                  </button>
+                ) : (
+                  <button className="btn-secondary w-full sm:w-auto" onClick={stopMovementSession}>
+                    Стоп и сохранить
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="card p-4">
+            <h3 className="text-sm font-semibold text-slate-500">Сессии движения</h3>
+            <div className="mt-2 space-y-2">
+              {movementSessions.length === 0 ? (
+                <p className="text-sm text-slate-500">Записей нет.</p>
+              ) : (
+                movementSessions.map(log => {
+                  const activity = data.library.movementActivities.find(
+                    item => item.id === log.activityRef
+                  );
+                  return (
+                    <div key={log.id} className="rounded-xl border border-slate-200 p-3">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold">
+                            {activity?.name ?? 'Движение'} · {log.durationMinutes} мин
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {log.distanceKm ? `Дистанция: ${log.distanceKm} км · ` : ''}
+                            {log.plannedFlights ? `Пролеты: ${log.plannedFlights}` : ''}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {new Date(log.dateTime).toLocaleTimeString('ru-RU', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}{' '}
+                            ·{' '}
+                            {timeOfDayLabels[log.timeOfDay ?? getTimeOfDayFromDateTime(log.dateTime)]}
+                          </p>
+                        </div>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <button className="btn-secondary w-full sm:w-auto" onClick={() => openMovement(log)}>
+                            Изменить
+                          </button>
+                          <button
+                            className="btn-secondary w-full text-red-500 sm:w-auto"
+                            onClick={() => deleteMovementSessionLog(log.id)}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
@@ -817,33 +1117,19 @@ const TrackPage = () => {
       </BottomSheet>
 
       <BottomSheet
-        open={Boolean(activityDraft)}
-        title={activityDraft?.id ? 'Редактировать активность' : 'Добавить активность'}
-        onClose={() => setActivityDraft(null)}
+        open={Boolean(trainingDraft)}
+        title={trainingDraft?.id ? 'Редактировать тренировку' : 'Добавить тренировку'}
+        onClose={() => setTrainingDraft(null)}
       >
-        {activityDraft && (
+        {trainingDraft && (
           <>
-            <label className="text-sm font-semibold text-slate-600">Тип</label>
-            <select
-              className="input"
-              value={activityDraft.type}
-              onChange={event =>
-                setActivityDraft(prev =>
-                  prev ? { ...prev, type: event.target.value as ActivityLog['type'] } : prev
-                )
-              }
-            >
-              <option value="stairs">Лестницы</option>
-              <option value="march">Марш</option>
-              <option value="workout">Тренировка</option>
-            </select>
             <label className="text-sm font-semibold text-slate-600">Минуты</label>
             <input
               type="number"
               className="input"
-              value={activityDraft.minutes}
+              value={trainingDraft.minutes}
               onChange={event =>
-                setActivityDraft(prev =>
+                setTrainingDraft(prev =>
                   prev ? { ...prev, minutes: Number(event.target.value) } : prev
                 )
               }
@@ -852,14 +1138,110 @@ const TrackPage = () => {
             <input
               type="datetime-local"
               className="input"
-              value={activityDraft.dateTime.slice(0, 16)}
+              value={trainingDraft.dateTime.slice(0, 16)}
               onChange={event =>
-                setActivityDraft(prev =>
+                setTrainingDraft(prev =>
                   prev ? { ...prev, dateTime: new Date(event.target.value).toISOString() } : prev
                 )
               }
             />
-            <button className="btn-primary w-full" onClick={saveActivity}>
+            <p className="text-xs text-slate-500">
+              Время суток: {timeOfDayLabels[getTimeOfDayFromDateTime(trainingDraft.dateTime)]}
+            </p>
+            <button className="btn-primary w-full" onClick={saveTraining}>
+              Сохранить
+            </button>
+          </>
+        )}
+      </BottomSheet>
+
+      <BottomSheet
+        open={Boolean(movementDraft)}
+        title={movementDraft?.id ? 'Редактировать движение' : 'Добавить движение'}
+        onClose={() => setMovementDraft(null)}
+      >
+        {movementDraft && (
+          <>
+            <label className="text-sm font-semibold text-slate-600">Активность</label>
+            <select
+              className="input"
+              value={movementDraft.activityRef}
+              onChange={event =>
+                setMovementDraft(prev =>
+                  prev ? { ...prev, activityRef: event.target.value } : prev
+                )
+              }
+            >
+              {data.library.movementActivities.map(activity => (
+                <option key={activity.id} value={activity.id}>
+                  {activity.name}
+                </option>
+              ))}
+            </select>
+            <label className="text-sm font-semibold text-slate-600">Минуты</label>
+            <input
+              type="number"
+              className="input"
+              value={movementDraft.durationMinutes}
+              onChange={event =>
+                setMovementDraft(prev =>
+                  prev ? { ...prev, durationMinutes: Number(event.target.value) } : prev
+                )
+              }
+            />
+            <label className="text-sm font-semibold text-slate-600">Дистанция (км)</label>
+            <input
+              type="number"
+              className="input"
+              value={movementDraft.distanceKm ?? 0}
+              onChange={event =>
+                setMovementDraft(prev =>
+                  prev ? { ...prev, distanceKm: Number(event.target.value) } : prev
+                )
+              }
+            />
+            {data.library.movementActivities.find(item => item.id === movementDraft.activityRef)
+              ?.kind === 'stairs' ? (
+              <>
+                <label className="text-sm font-semibold text-slate-600">План пролетов</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={movementDraft.plannedFlights ?? 0}
+                  onChange={event =>
+                    setMovementDraft(prev =>
+                      prev ? { ...prev, plannedFlights: Number(event.target.value) } : prev
+                    )
+                  }
+                />
+                <label className="text-sm font-semibold text-slate-600">Фактически пройдено</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={movementDraft.actualFlights ?? 0}
+                  onChange={event =>
+                    setMovementDraft(prev =>
+                      prev ? { ...prev, actualFlights: Number(event.target.value) } : prev
+                    )
+                  }
+                />
+              </>
+            ) : null}
+            <label className="text-sm font-semibold text-slate-600">Дата и время</label>
+            <input
+              type="datetime-local"
+              className="input"
+              value={movementDraft.dateTime.slice(0, 16)}
+              onChange={event =>
+                setMovementDraft(prev =>
+                  prev ? { ...prev, dateTime: new Date(event.target.value).toISOString() } : prev
+                )
+              }
+            />
+            <p className="text-xs text-slate-500">
+              Время суток: {timeOfDayLabels[getTimeOfDayFromDateTime(movementDraft.dateTime)]}
+            </p>
+            <button className="btn-primary w-full" onClick={saveMovement}>
               Сохранить
             </button>
           </>

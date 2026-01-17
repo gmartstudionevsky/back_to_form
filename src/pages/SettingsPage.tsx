@@ -26,7 +26,9 @@ const SettingsPage = () => {
   const exportCsv = () => {
     const dates = new Set<string>();
     data.logs.foodDays.forEach(day => dates.add(day.date));
-    data.logs.activity.forEach(log => dates.add(log.dateTime.slice(0, 10)));
+    data.logs.training.forEach(log => dates.add(log.dateTime.slice(0, 10)));
+    data.logs.movementSessions.forEach(log => dates.add(log.dateTime.slice(0, 10)));
+    data.logs.movementDays.forEach(day => dates.add(day.date));
     data.logs.smoking.forEach(log => dates.add(log.dateTime.slice(0, 10)));
     data.logs.weight.forEach(log => dates.add(log.dateTime.slice(0, 10)));
     data.logs.waist.forEach(log => dates.add(log.date));
@@ -49,9 +51,10 @@ const SettingsPage = () => {
             { kcal: 0, protein: 0, fat: 0, carb: 0 }
           ) ?? { kcal: 0, protein: 0, fat: 0, carb: 0 };
 
-        const activityMinutes = data.logs.activity
+        const trainingMinutes = data.logs.training
           .filter(item => item.dateTime.slice(0, 10) === date)
           .reduce((sum, item) => sum + item.minutes, 0);
+        const movementSteps = data.logs.movementDays.find(item => item.date === date)?.steps ?? '';
         const cigarettes = data.logs.smoking
           .filter(item => item.dateTime.slice(0, 10) === date)
           .reduce((sum, item) => sum + item.count, 0);
@@ -71,7 +74,8 @@ const SettingsPage = () => {
           totals.protein.toFixed(1),
           totals.fat.toFixed(1),
           totals.carb.toFixed(1),
-          activityMinutes,
+          trainingMinutes,
+          movementSteps,
           cigarettes,
           weight,
           waist,
@@ -81,7 +85,7 @@ const SettingsPage = () => {
       });
 
     const header =
-      'date,calories,protein,fat,carb,movement_minutes,cigarettes,weight,waist,plan_done_ratio,notes';
+      'date,calories,protein,fat,carb,training_minutes,movement_steps,cigarettes,weight,waist,plan_done_ratio,notes';
     const csv = [header, ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);

@@ -11,7 +11,9 @@ import {
   TaskInstance,
   WaistLog,
   WeightLog,
-  SleepLog
+  SleepLog,
+  MovementDayLog,
+  MovementSessionLog
 } from '../types';
 import { loadData, saveData } from '../storage/localStore';
 
@@ -24,9 +26,13 @@ type AppState = {
   addFoodEntry: (date: string, entry: FoodEntry) => void;
   updateFoodEntry: (date: string, entry: FoodEntry) => void;
   deleteFoodEntry: (date: string, entryId: string) => void;
-  addActivityLog: (log: ActivityLog) => void;
-  updateActivityLog: (log: ActivityLog) => void;
-  deleteActivityLog: (id: string) => void;
+  addTrainingLog: (log: ActivityLog) => void;
+  updateTrainingLog: (log: ActivityLog) => void;
+  deleteTrainingLog: (id: string) => void;
+  addMovementSessionLog: (log: MovementSessionLog) => void;
+  updateMovementSessionLog: (log: MovementSessionLog) => void;
+  deleteMovementSessionLog: (id: string) => void;
+  setMovementDayLog: (log: MovementDayLog) => void;
   addSmokingLog: (log: SmokingLog) => void;
   updateSmokingLog: (log: SmokingLog) => void;
   deleteSmokingLog: (id: string) => void;
@@ -96,21 +102,52 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { ...data };
     });
   },
-  addActivityLog: log => {
+  addTrainingLog: log => {
     get().updateData(data => {
-      data.logs.activity.push({ ...log, id: createId() });
+      data.logs.training.push({ ...log, id: createId() });
       return { ...data };
     });
   },
-  updateActivityLog: log => {
+  updateTrainingLog: log => {
     get().updateData(data => {
-      data.logs.activity = data.logs.activity.map(item => (item.id === log.id ? log : item));
+      data.logs.training = data.logs.training.map(item => (item.id === log.id ? log : item));
       return { ...data };
     });
   },
-  deleteActivityLog: id => {
+  deleteTrainingLog: id => {
     get().updateData(data => {
-      data.logs.activity = data.logs.activity.filter(item => item.id !== id);
+      data.logs.training = data.logs.training.filter(item => item.id !== id);
+      return { ...data };
+    });
+  },
+  addMovementSessionLog: log => {
+    get().updateData(data => {
+      data.logs.movementSessions.push({ ...log, id: createId() });
+      return { ...data };
+    });
+  },
+  updateMovementSessionLog: log => {
+    get().updateData(data => {
+      data.logs.movementSessions = data.logs.movementSessions.map(item =>
+        item.id === log.id ? log : item
+      );
+      return { ...data };
+    });
+  },
+  deleteMovementSessionLog: id => {
+    get().updateData(data => {
+      data.logs.movementSessions = data.logs.movementSessions.filter(item => item.id !== id);
+      return { ...data };
+    });
+  },
+  setMovementDayLog: log => {
+    get().updateData(data => {
+      const existing = data.logs.movementDays.find(item => item.date === log.date);
+      if (existing) {
+        existing.steps = log.steps;
+      } else {
+        data.logs.movementDays.push(log);
+      }
       return { ...data };
     });
   },

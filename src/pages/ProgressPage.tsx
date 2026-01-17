@@ -22,7 +22,9 @@ const ProgressPage = () => {
     data.logs.foodDays.forEach(day => dates.add(day.date));
     data.logs.weight.forEach(log => dates.add(log.dateTime.slice(0, 10)));
     data.logs.waist.forEach(log => dates.add(log.date));
-    data.logs.activity.forEach(log => dates.add(log.dateTime.slice(0, 10)));
+    data.logs.training.forEach(log => dates.add(log.dateTime.slice(0, 10)));
+    data.logs.movementSessions.forEach(log => dates.add(log.dateTime.slice(0, 10)));
+    data.logs.movementDays.forEach(day => dates.add(day.date));
     data.logs.smoking.forEach(log => dates.add(log.dateTime.slice(0, 10)));
 
     const sortedDates = Array.from(dates).sort();
@@ -30,9 +32,10 @@ const ProgressPage = () => {
 
     return sliced.map(date => {
       const foodDay = data.logs.foodDays.find(item => item.date === date);
-      const activityMinutes = data.logs.activity
+      const trainingMinutes = data.logs.training
         .filter(item => item.dateTime.slice(0, 10) === date)
         .reduce((sum, item) => sum + item.minutes, 0);
+      const movementSteps = data.logs.movementDays.find(item => item.date === date)?.steps ?? 0;
       const cigarettes = data.logs.smoking
         .filter(item => item.dateTime.slice(0, 10) === date)
         .reduce((sum, item) => sum + item.count, 0);
@@ -47,7 +50,8 @@ const ProgressPage = () => {
       return {
         date,
         calories: Math.round(calories),
-        activityMinutes,
+        trainingMinutes,
+        movementSteps,
         cigarettes,
         weight,
         waist
@@ -118,7 +122,21 @@ const ProgressPage = () => {
       </div>
 
       <div className="card p-4">
-        <h2 className="section-title">Сигареты/активность</h2>
+        <h2 className="section-title">Тренировки</h2>
+        <div className="h-48">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData}>
+              <XAxis dataKey="date" hide />
+              <YAxis />
+              <Tooltip />
+              <Line type="monotone" dataKey="trainingMinutes" stroke="#0ea5e9" strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="card p-4">
+        <h2 className="section-title">Сигареты/движение</h2>
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData}>
@@ -126,7 +144,7 @@ const ProgressPage = () => {
               <YAxis />
               <Tooltip />
               <Line type="monotone" dataKey="cigarettes" stroke="#ef4444" strokeWidth={2} />
-              <Line type="monotone" dataKey="activityMinutes" stroke="#0ea5e9" strokeWidth={2} />
+              <Line type="monotone" dataKey="movementSteps" stroke="#14b8a6" strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>
         </div>

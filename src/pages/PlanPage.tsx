@@ -3,6 +3,7 @@ import { BottomSheet } from '../components/BottomSheet';
 import { useAppStore } from '../store/useAppStore';
 import { FoodEntry, MealPlanItem, Period, WorkoutPlanItem } from '../types';
 import { calcRecipeNutrition } from '../utils/nutrition';
+import { timeOfDayLabels } from '../utils/timeOfDay';
 
 const tabs = ['Периоды', 'Рацион'] as const;
 
@@ -24,6 +25,7 @@ type WorkoutDraft = {
   protocolRef: string;
   plannedMinutes: number;
   isRequired: boolean;
+  movementActivityRef: string;
 };
 
 const mealLabels: Record<FoodEntry['meal'], string> = {
@@ -131,6 +133,8 @@ const PlanPage = () => {
     setMealSheet(null);
   };
 
+  const defaultMovementActivityId = data.library.movementActivities[0]?.id ?? '';
+
   const addWorkoutToPlan = () => {
     if (!workoutSheet || !editorDate) return;
     updateData(state => {
@@ -142,7 +146,13 @@ const PlanPage = () => {
         kind: workoutSheet.kind,
         protocolRef: workoutSheet.protocolRef || undefined,
         plannedMinutes: workoutSheet.kind === 'movement' ? workoutSheet.plannedMinutes : undefined,
-        isRequired: workoutSheet.isRequired
+        isRequired: workoutSheet.isRequired,
+        movementActivityRef:
+          workoutSheet.kind === 'movement' && workoutSheet.movementActivityRef
+            ? workoutSheet.movementActivityRef
+            : workoutSheet.kind === 'movement'
+              ? defaultMovementActivityId
+              : undefined
       });
       return { ...state };
     });
@@ -446,7 +456,8 @@ const PlanPage = () => {
                         kind: 'workout',
                         protocolRef: '',
                         plannedMinutes: 10,
-                        isRequired: true
+                        isRequired: true,
+                        movementActivityRef: data.library.movementActivities[0]?.id ?? ''
                       })
                     }
                   >
@@ -463,7 +474,11 @@ const PlanPage = () => {
                     >
                       <div className="text-sm">
                         {item.kind === 'movement'
-                          ? `Движение · ${item.plannedMinutes ?? 10} мин`
+                          ? `Движение · ${
+                              data.library.movementActivities.find(
+                                activity => activity.id === item.movementActivityRef
+                              )?.name ?? 'Активность'
+                            } · ${item.plannedMinutes ?? 10} мин`
                           : data.library.protocols.find(proto => proto.id === item.protocolRef)?.name}
                       </div>
                       <button
@@ -706,9 +721,11 @@ const PlanPage = () => {
                 )
               }
             >
-              <option value="morning">Утро</option>
-              <option value="day">День</option>
-              <option value="evening">Вечер</option>
+              {(Object.keys(timeOfDayLabels) as WorkoutPlanItem['timeOfDay'][]).map(option => (
+                <option key={option} value={option}>
+                  {timeOfDayLabels[option]}
+                </option>
+              ))}
             </select>
             <label className="text-sm font-semibold text-slate-600">Тип</label>
             <select
@@ -739,17 +756,34 @@ const PlanPage = () => {
                 ))}
               </select>
             ) : (
-              <input
-                className="input"
-                type="number"
-                placeholder="Минуты движения"
-                value={workoutSheet.plannedMinutes}
-                onChange={event =>
-                  setWorkoutSheet(prev =>
-                    prev ? { ...prev, plannedMinutes: Number(event.target.value) } : prev
-                  )
-                }
-              />
+              <>
+                <select
+                  className="input"
+                  value={workoutSheet.movementActivityRef || defaultMovementActivityId}
+                  onChange={event =>
+                    setWorkoutSheet(prev =>
+                      prev ? { ...prev, movementActivityRef: event.target.value } : prev
+                    )
+                  }
+                >
+                  {data.library.movementActivities.map(activity => (
+                    <option key={activity.id} value={activity.id}>
+                      {activity.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="input"
+                  type="number"
+                  placeholder="Минуты движения"
+                  value={workoutSheet.plannedMinutes}
+                  onChange={event =>
+                    setWorkoutSheet(prev =>
+                      prev ? { ...prev, plannedMinutes: Number(event.target.value) } : prev
+                    )
+                  }
+                />
+              </>
             )}
             <label className="flex items-center gap-2 text-sm">
               <input
