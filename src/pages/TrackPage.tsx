@@ -701,7 +701,7 @@ const TrackPage = () => {
                     )
                   }
                 />
-                <div className="flex flex-wrap gap-2">
+                <div className="control-row">
                   {data.library.products
                     .find(product => product.id === foodSheet.refId)
                     ?.portionPresets?.map(preset => (

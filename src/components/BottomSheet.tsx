@@ -31,7 +31,7 @@ export const BottomSheet = ({ open, title, onClose, children }: BottomSheetProps
         aria-label="Закрыть"
       />
       <div className="relative flex max-h-[85vh] flex-col rounded-t-3xl bg-white p-5 shadow-xl safe-bottom">
-        <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h3 className="text-lg font-semibold">{title}</h3>
           <button className="btn-secondary" onClick={onClose}>
             Закрыть
