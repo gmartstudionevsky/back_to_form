@@ -464,6 +464,22 @@ const PlanPage = () => {
                     Добавить сессию
                   </button>
                 </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <input
+                    className="input"
+                    type="number"
+                    placeholder="Шаги по плану"
+                    value={dayPlan.plannedSteps ?? ''}
+                    onChange={event =>
+                      updateData(state => {
+                        const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+                        if (!plan) return { ...state };
+                        plan.plannedSteps = Number(event.target.value) || undefined;
+                        return { ...state };
+                      })
+                    }
+                  />
+                </div>
                 {dayPlan.workoutsPlan.length === 0 ? (
                   <p className="text-xs text-slate-500">Нет тренировок</p>
                 ) : (

@@ -1,6 +1,6 @@
 import { AppData } from '../types';
 
-export const schemaVersion = 6;
+export const schemaVersion = 7;
 
 export const seedData: AppData = {
   schemaVersion,
@@ -605,6 +605,7 @@ export const seedData: AppData = {
             kind: 'workout'
           }
         ],
+        plannedSteps: 8000,
         requirements: {
           requireWeight: true,
           requireWaist: false,
@@ -679,6 +680,7 @@ export const seedData: AppData = {
             kind: 'workout'
           }
         ],
+        plannedSteps: 9000,
         requirements: {
           requireWeight: false,
           requireWaist: true,
@@ -753,6 +755,7 @@ export const seedData: AppData = {
             kind: 'movement'
           }
         ],
+        plannedSteps: 7000,
         requirements: {
           requireWeight: false,
           requireWaist: false,

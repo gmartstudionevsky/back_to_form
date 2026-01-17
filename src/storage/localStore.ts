@@ -160,6 +160,12 @@ export const loadData = (): AppData => {
         migrated.logs.movementSessions = movementSessions;
         migrated.logs.movementDays = parsed.logs?.movementDays ?? [];
       }
+      if (!parsed.schemaVersion || parsed.schemaVersion < 7) {
+        migrated.planner.dayPlans = (parsed.planner?.dayPlans ?? []).map(plan => ({
+          ...plan,
+          plannedSteps: plan.plannedSteps ?? undefined
+        }));
+      }
       return migrated;
     }
     return parsed;

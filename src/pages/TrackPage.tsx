@@ -72,10 +72,12 @@ const TrackPage = () => {
   );
   const [movementPlannedFlights, setMovementPlannedFlights] = useState(10);
   const [movementSteps, setMovementSteps] = useState(0);
+  const [movementDurationMinutes, setMovementDurationMinutes] = useState(20);
   const [movementTimer, setMovementTimer] = useState({
     running: false,
     startedAt: 0,
-    elapsedSec: 0
+    elapsedSec: 0,
+    durationSec: 0
   });
   const [movementStartLocation, setMovementStartLocation] = useState<GeoPoint | null>(null);
   const [movementGeoStatus, setMovementGeoStatus] = useState<string | null>(null);
@@ -149,9 +151,13 @@ const TrackPage = () => {
   const movementSessions = data.logs.movementSessions.filter(
     log => log.dateTime.slice(0, 10) === selectedDate
   );
-  const plannedMovementActivityId = dayPlan?.workoutsPlan.find(
-    item => item.kind === 'movement' && item.movementActivityRef
-  )?.movementActivityRef;
+  const plannedMovement = dayPlan?.workoutsPlan.find(item => item.kind === 'movement');
+  const plannedMovementActivityId = plannedMovement?.movementActivityRef;
+  const plannedMovementSessionMinutes = plannedMovement?.plannedMinutes ?? 20;
+  const plannedMovementActivityName = plannedMovementActivityId
+    ? data.library.movementActivities.find(activity => activity.id === plannedMovementActivityId)
+        ?.name
+    : undefined;
   const defaultMovementActivityId =
     plannedMovementActivityId ??
     data.library.movementActivities[0]?.id ??
@@ -162,20 +168,33 @@ const TrackPage = () => {
   }, [movementDay?.steps, selectedDate]);
 
   useEffect(() => {
-    if (movementActivityId || !defaultMovementActivityId) return;
+    if (!defaultMovementActivityId) return;
     setMovementActivityId(defaultMovementActivityId);
-  }, [defaultMovementActivityId, movementActivityId]);
+  }, [defaultMovementActivityId, selectedDate]);
+
+  useEffect(() => {
+    setMovementDurationMinutes(plannedMovementSessionMinutes);
+  }, [plannedMovementSessionMinutes, selectedDate]);
 
   useEffect(() => {
     if (!movementTimer.running) return;
     const id = window.setInterval(() => {
-      setMovementTimer(prev => ({
-        ...prev,
-        elapsedSec: Math.floor((Date.now() - prev.startedAt) / 1000)
-      }));
+      setMovementTimer(prev => {
+        const elapsedSec = Math.floor((Date.now() - prev.startedAt) / 1000);
+        return {
+          ...prev,
+          elapsedSec: Math.min(elapsedSec, prev.durationSec)
+        };
+      });
     }, 1000);
     return () => window.clearInterval(id);
   }, [movementTimer.running]);
+
+  useEffect(() => {
+    if (!movementTimer.running) return;
+    if (movementTimer.elapsedSec < movementTimer.durationSec) return;
+    stopMovementSession({ elapsedSec: movementTimer.durationSec });
+  }, [movementTimer.elapsedSec, movementTimer.durationSec, movementTimer.running]);
 
   const requestLocation = () =>
     new Promise<GeoPoint | null>(resolve => {
@@ -285,7 +304,7 @@ const TrackPage = () => {
         id: '',
         dateTime: toDateTime(selectedDate, ''),
         activityRef,
-        durationMinutes: 20,
+        durationMinutes: plannedMovementSessionMinutes,
         plannedFlights: 10,
         timeOfDay: getTimeOfDayFromDateTime(new Date().toISOString())
       }
@@ -313,18 +332,32 @@ const TrackPage = () => {
   };
 
   const startMovementSession = async () => {
-    if (!movementActivityId) return;
+    if (
+      !movementActivityId ||
+      !Number.isFinite(movementDurationMinutes) ||
+      movementDurationMinutes <= 0
+    )
+      return;
     setMovementGeoStatus('Запрашиваем геолокацию…');
     const startLocation = await requestLocation();
     setMovementStartLocation(startLocation);
-    setMovementTimer({ running: true, startedAt: Date.now(), elapsedSec: 0 });
+    setMovementTimer({
+      running: true,
+      startedAt: Date.now(),
+      elapsedSec: 0,
+      durationSec: movementDurationMinutes * 60
+    });
   };
 
-  const stopMovementSession = async () => {
+  const stopMovementSession = async ({ elapsedSec }: { elapsedSec?: number } = {}) => {
     if (!movementTimer.running) return;
+    const finalElapsedSec =
+      typeof elapsedSec === 'number' ? elapsedSec : movementTimer.elapsedSec;
+    const startedAt = movementTimer.startedAt;
+    setMovementTimer(prev => ({ ...prev, running: false }));
     setMovementGeoStatus('Фиксируем завершение…');
     const endLocation = await requestLocation();
-    const durationMinutes = Math.max(1, Math.round(movementTimer.elapsedSec / 60));
+    const durationMinutes = Math.max(1, Math.round(finalElapsedSec / 60));
     const distanceKm =
       movementStartLocation && endLocation
         ? Math.round(calcDistanceKm(movementStartLocation, endLocation) * 100) / 100
@@ -332,16 +365,16 @@ const TrackPage = () => {
     const activity = data.library.movementActivities.find(item => item.id === movementActivityId);
     addMovementSessionLog({
       id: '',
-      dateTime: new Date(movementTimer.startedAt).toISOString(),
+      dateTime: new Date(startedAt).toISOString(),
       activityRef: movementActivityId,
       durationMinutes,
       distanceKm,
       startLocation: movementStartLocation ?? undefined,
       endLocation: endLocation ?? undefined,
       plannedFlights: activity?.kind === 'stairs' ? movementPlannedFlights : undefined,
-      timeOfDay: getTimeOfDayFromDateTime(new Date(movementTimer.startedAt).toISOString())
+      timeOfDay: getTimeOfDayFromDateTime(new Date(startedAt).toISOString())
     });
-    setMovementTimer({ running: false, startedAt: 0, elapsedSec: 0 });
+    setMovementTimer({ running: false, startedAt: 0, elapsedSec: 0, durationSec: 0 });
     setMovementStartLocation(null);
   };
 
@@ -624,78 +657,123 @@ const TrackPage = () => {
 
       {active === 'Движение' && (
         <div className="space-y-3">
-          <div className="card p-4 space-y-3">
+          <div className="card space-y-4 p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="section-title">Шаги за день</h2>
-              <button
-                className="btn-primary w-full sm:w-auto"
-                onClick={() => setMovementDayLog({ date: selectedDate, steps: movementSteps })}
-              >
-                Сохранить шаги
-              </button>
-            </div>
-            <input
-              type="number"
-              className="input"
-              value={movementSteps}
-              onChange={event => setMovementSteps(Number(event.target.value))}
-              placeholder="Количество шагов"
-            />
-            <p className="text-xs text-slate-500">
-              Введите итоговое количество шагов за день.
-            </p>
-          </div>
-
-          <div className="card p-4 space-y-3">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <h3 className="text-sm font-semibold text-slate-500">Запуск движения</h3>
+              <h2 className="section-title">План движения</h2>
               <button className="btn-secondary w-full sm:w-auto" onClick={() => openMovement()}>
                 Добавить вручную
               </button>
             </div>
-            <label className="text-xs text-slate-500">
-              Активность
-              <select
-                className="input mt-1"
-                value={movementActivityId}
-                onChange={event => setMovementActivityId(event.target.value)}
-              >
-                {data.library.movementActivities.map(activity => (
-                  <option key={activity.id} value={activity.id}>
-                    {activity.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {data.library.movementActivities.find(item => item.id === movementActivityId)?.kind ===
-            'stairs' ? (
-              <label className="text-xs text-slate-500">
-                План пролетов
-                <input
-                  type="number"
-                  className="input mt-1"
-                  value={movementPlannedFlights}
-                  onChange={event => setMovementPlannedFlights(Number(event.target.value))}
-                />
-              </label>
-            ) : null}
+
             <div className="rounded-2xl border border-slate-200 p-3 text-sm">
-              <p className="font-semibold">Таймер</p>
-              <p className="text-xs text-slate-500">Время: {formatElapsed(movementTimer.elapsedSec)}</p>
-              {movementGeoStatus ? (
-                <p className="text-xs text-slate-400">Геолокация: {movementGeoStatus}</p>
-              ) : null}
-              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                {!movementTimer.running ? (
-                  <button className="btn-primary w-full sm:w-auto" onClick={startMovementSession}>
-                    Старт
-                  </button>
-                ) : (
-                  <button className="btn-secondary w-full sm:w-auto" onClick={stopMovementSession}>
-                    Стоп и сохранить
-                  </button>
-                )}
+              <p className="font-semibold">Запланированная активность</p>
+              <p className="text-xs text-slate-500">
+                {plannedMovement
+                  ? `${plannedMovementActivityName ?? 'Движение'} · ${plannedMovementSessionMinutes} мин${
+                      plannedMovement.plannedTime ? ` · ${plannedMovement.plannedTime}` : ''
+                    }`
+                  : 'Не задано'}
+              </p>
+              <div className="mt-3 space-y-2">
+                <label className="text-xs text-slate-500">
+                  Активность
+                  <select
+                    className="input mt-1"
+                    value={movementActivityId}
+                    onChange={event => setMovementActivityId(event.target.value)}
+                  >
+                    {data.library.movementActivities.map(activity => (
+                      <option key={activity.id} value={activity.id}>
+                        {activity.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs text-slate-500">
+                  Время таймера, мин
+                  <input
+                    type="number"
+                    className="input mt-1"
+                    min={1}
+                    value={movementDurationMinutes}
+                    onChange={event => {
+                      const value = Number(event.target.value);
+                      setMovementDurationMinutes(Number.isFinite(value) ? value : 0);
+                    }}
+                  />
+                </label>
+                {data.library.movementActivities.find(item => item.id === movementActivityId)?.kind ===
+                'stairs' ? (
+                  <label className="text-xs text-slate-500">
+                    Пролеты вверх до спуска
+                    <input
+                      type="number"
+                      className="input mt-1"
+                      min={1}
+                      value={movementPlannedFlights}
+                      onChange={event => {
+                        const value = Number(event.target.value);
+                        setMovementPlannedFlights(Number.isFinite(value) ? value : 0);
+                      }}
+                    />
+                  </label>
+                ) : null}
               </div>
+              <div className="mt-3 rounded-2xl border border-slate-200 p-3 text-sm">
+                <p className="font-semibold">Таймер движения</p>
+                {movementTimer.running ? (
+                  <p className="text-xs text-slate-500">
+                    Осталось:{' '}
+                    {formatElapsed(Math.max(0, movementTimer.durationSec - movementTimer.elapsedSec))}{' '}
+                    · Всего: {formatElapsed(movementTimer.durationSec)}
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    План таймера: {movementDurationMinutes} мин
+                  </p>
+                )}
+                {movementGeoStatus ? (
+                  <p className="text-xs text-slate-400">Геолокация: {movementGeoStatus}</p>
+                ) : null}
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  {!movementTimer.running ? (
+                    <button className="btn-primary w-full sm:w-auto" onClick={startMovementSession}>
+                      Выполнить по плану
+                    </button>
+                  ) : (
+                    <button className="btn-secondary w-full sm:w-auto" onClick={stopMovementSession}>
+                      Завершить раньше
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-3 text-sm">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold">Шаги за день</p>
+                  <p className="text-xs text-slate-500">
+                    План: {dayPlan?.plannedSteps ?? 'не задан'} · Факт: {movementSteps} шагов
+                  </p>
+                </div>
+                <button
+                  className="btn-primary w-full sm:w-auto"
+                  onClick={() => setMovementDayLog({ date: selectedDate, steps: movementSteps })}
+                >
+                  Сохранить шаги
+                </button>
+              </div>
+              <input
+                type="number"
+                className="input mt-2"
+                value={movementSteps}
+                onChange={event => setMovementSteps(Number(event.target.value))}
+                placeholder="Количество шагов"
+              />
+              <p className="mt-2 text-xs text-slate-500">
+                Укажите итоговое количество шагов за день.
+              </p>
             </div>
           </div>
 

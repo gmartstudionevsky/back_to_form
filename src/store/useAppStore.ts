@@ -271,6 +271,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         mealComponents: { breakfast: [], lunch: [], dinner: [], snack: [] },
         mealTimes: { breakfast: '', lunch: '', dinner: '', snack: '' },
         workoutsPlan: [],
+        plannedSteps: undefined,
         requirements: { requireWeight: false, requireWaist: false, requirePhotos: [] }
       };
       get().updateData(data => {
@@ -285,6 +286,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         existing.mealComponents ??= { breakfast: [], lunch: [], dinner: [], snack: [] };
         existing.mealTimes ??= { breakfast: '', lunch: '', dinner: '', snack: '' };
         existing.workoutsPlan ??= [];
+        existing.plannedSteps ??= undefined;
         existing.requirements ??= { requireWeight: false, requireWaist: false, requirePhotos: [] };
         existing.tasks ??= [];
         return { ...data };
