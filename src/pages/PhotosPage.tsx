@@ -110,9 +110,9 @@ const PhotosPage = () => {
         {requiredPhotos.length > 0 ? (
           <div className="space-y-2">
             <p className="text-sm font-semibold">Нужно сделать сегодня:</p>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               {requiredPhotos.map(kind => (
-                <button key={kind} className="btn-primary" onClick={() => openPlanUpload(kind)}>
+                <button key={kind} className="btn-primary w-full sm:w-auto" onClick={() => openPlanUpload(kind)}>
                   Добавить {photoLabels[kind]}
                 </button>
               ))}
@@ -135,7 +135,7 @@ const PhotosPage = () => {
           .map(([date, photos]) => (
             <div key={date} className="space-y-2">
               <p className="text-xs font-semibold uppercase text-slate-400">{date}</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {photos.map(photo => (
                   <div key={photo.id} className="card p-2">
                     {previews[photo.id] ? (
@@ -151,10 +151,10 @@ const PhotosPage = () => {
                       </div>
                     )}
                     <div className="mt-2 space-y-1 text-xs text-slate-500">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <span>{photo.kind}</span>
                         <button
-                          className="text-red-500"
+                          className="btn-secondary w-full text-red-500 sm:w-auto"
                           onClick={() => handleDelete(photo.id, photo.blobKey)}
                         >
                           Удалить
@@ -202,7 +202,7 @@ const PhotosPage = () => {
           value={uploadMeta.notes}
           onChange={event => setUploadMeta(prev => ({ ...prev, notes: event.target.value }))}
         />
-        <button className="btn-primary" onClick={handleUpload}>
+        <button className="btn-primary w-full" onClick={handleUpload}>
           Сохранить фото
         </button>
       </BottomSheet>

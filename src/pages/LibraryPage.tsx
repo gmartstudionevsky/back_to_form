@@ -38,7 +38,8 @@ const LibraryPage = () => {
     meal: 'breakfast' as FoodEntry['meal'],
     grams: 120,
     servings: 1,
-    time: ''
+    time: '',
+    date: todayISO()
   });
   const [newDish, setNewDish] = useState({
     name: '',
@@ -91,7 +92,7 @@ const LibraryPage = () => {
   }, [active, data.library, query]);
 
   const openFoodSheet = (item: FoodSheetItem) => {
-    setFoodForm({ meal: 'breakfast', grams: 120, servings: 1, time: '' });
+    setFoodForm({ meal: 'breakfast', grams: 120, servings: 1, time: '', date: todayISO() });
     setFoodSheet(item);
   };
 
@@ -129,18 +130,18 @@ const LibraryPage = () => {
           value={query}
           onChange={event => setQuery(event.target.value)}
         />
-        <div className="flex flex-wrap gap-2">
-          <button className="btn-secondary" onClick={() => setCreateSheet('dish')}>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button className="btn-secondary w-full sm:w-auto" onClick={() => setCreateSheet('dish')}>
             + Новое блюдо
           </button>
-          <button className="btn-secondary" onClick={() => setCreateSheet('product')}>
+          <button className="btn-secondary w-full sm:w-auto" onClick={() => setCreateSheet('product')}>
             + Новый продукт
           </button>
-          <button className="btn-secondary" onClick={() => setCreateSheet('exercise')}>
+          <button className="btn-secondary w-full sm:w-auto" onClick={() => setCreateSheet('exercise')}>
             + Новое упражнение
           </button>
         </div>
-        <div className="flex gap-2 overflow-x-auto">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {tabs.map(tab => (
             <button
               key={tab}
@@ -158,7 +159,7 @@ const LibraryPage = () => {
       <div className="space-y-3">
         {filtered.map(item => (
           <div key={(item as any).id} className="card p-4">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-base font-semibold">
                   {'title' in item ? (item as any).title : (item as any).name}
@@ -172,13 +173,13 @@ const LibraryPage = () => {
                   </p>
                 ) : null}
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button className="btn-secondary" onClick={() => setDetailItem(item)}>
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <button className="btn-secondary w-full sm:w-auto" onClick={() => setDetailItem(item)}>
                   Подробнее
                 </button>
                 {active === 'Продукты' && 'kcalPer100g' in item ? (
                   <button
-                    className="btn-primary"
+                    className="btn-primary w-full sm:w-auto"
                     onClick={() => openFoodSheet({ kind: 'product', refId: (item as any).id })}
                   >
                     Добавить в питание
@@ -186,14 +187,14 @@ const LibraryPage = () => {
                 ) : null}
                 {active === 'Блюда' ? (
                   <button
-                    className="btn-primary"
+                    className="btn-primary w-full sm:w-auto"
                     onClick={() => openFoodSheet({ kind: 'dish', refId: (item as any).id })}
                   >
                     Добавить в питание
                   </button>
                 ) : null}
                 {active === 'Шаблоны' ? (
-                  <button className="btn-primary" onClick={() => setTaskSheet(item as TaskTemplate)}>
+                  <button className="btn-primary w-full sm:w-auto" onClick={() => setTaskSheet(item as TaskTemplate)}>
                     Добавить задачу
                   </button>
                 ) : null}
@@ -266,7 +267,7 @@ const LibraryPage = () => {
                   }
                 />
                 <button
-                  className="btn-secondary"
+                  className="btn-secondary w-full sm:w-auto"
                   onClick={async () => {
                     const exercise = detailItem as Exercise;
                     let blobKey = exercise.media?.localVideoBlobKey;
@@ -388,6 +389,13 @@ const LibraryPage = () => {
       >
         {foodSheet && (
           <>
+            <label className="text-sm font-semibold text-slate-600">Дата</label>
+            <input
+              type="date"
+              className="input"
+              value={foodForm.date}
+              onChange={event => setFoodForm(prev => ({ ...prev, date: event.target.value }))}
+            />
             <label className="text-sm font-semibold text-slate-600">Приём пищи</label>
             <select
               className="input"
@@ -435,9 +443,10 @@ const LibraryPage = () => {
               </>
             )}
             <button
-              className="btn-primary"
+              className="btn-primary w-full"
               onClick={() => {
-                addFoodEntry(todayISO(), {
+                if (!foodForm.date) return;
+                addFoodEntry(foodForm.date, {
                   id: '',
                   kind: foodSheet.kind,
                   refId: foodSheet.refId,
@@ -470,7 +479,7 @@ const LibraryPage = () => {
               onChange={event => setTaskDate(event.target.value)}
             />
             <button
-              className="btn-primary"
+              className="btn-primary w-full"
               onClick={() => {
                 addTemplateToDate(taskSheet, taskDate);
                 setTaskSheet(null);
@@ -527,7 +536,7 @@ const LibraryPage = () => {
               <option value="cheat">Читмил</option>
             </select>
             <button
-              className="btn-primary"
+              className="btn-primary w-full"
               onClick={() => {
                 if (!newDish.name) return;
                 updateData(state => {
@@ -598,7 +607,7 @@ const LibraryPage = () => {
               }
             />
             <button
-              className="btn-primary"
+              className="btn-primary w-full"
               onClick={() => {
                 if (!newProduct.name) return;
                 updateData(state => {
@@ -648,7 +657,7 @@ const LibraryPage = () => {
               onChange={event => setNewExercise(prev => ({ ...prev, steps: event.target.value }))}
             />
             <button
-              className="btn-primary"
+              className="btn-primary w-full"
               onClick={() => {
                 if (!newExercise.name) return;
                 updateData(state => {

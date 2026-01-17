@@ -59,7 +59,7 @@ const ProgressPage = () => {
     <section className="space-y-4">
       <header className="space-y-2">
         <h1 className="text-2xl font-bold">Прогресс</h1>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {ranges.map(value => (
             <button
               key={value}

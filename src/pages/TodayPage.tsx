@@ -259,7 +259,7 @@ const TodayPage = () => {
             className="input w-auto"
           />
         </div>
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 grid grid-cols-3 gap-2">
           <button className="btn-secondary flex-1" onClick={() => moveDate(-1)}>
             Вчера
           </button>
@@ -296,7 +296,7 @@ const TodayPage = () => {
 
       <div className="card p-4">
         <h2 className="section-title">Быстрые действия</h2>
-        <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <button className="btn-primary" onClick={() => setSheet('food')}>
             Добавить питание
           </button>
@@ -332,7 +332,7 @@ const TodayPage = () => {
                       const isMovement = session.kind === 'movement' || !protocol;
                       return (
                         <div key={session.id} className="rounded-2xl border border-slate-200 p-3">
-                          <div className="flex items-start justify-between gap-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div>
                               <p className="text-sm font-semibold">
                                 {isMovement
@@ -349,10 +349,10 @@ const TodayPage = () => {
                               <span className="badge">Выполнено</span>
                             ) : null}
                           </div>
-                          <div className="mt-2 flex gap-2">
+                          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                             {isMovement ? (
                               <button
-                                className="btn-secondary flex-1"
+                                className="btn-secondary w-full sm:w-auto"
                                 onClick={() => {
                                   const minutes = session.plannedMinutes ?? 10;
                                   addActivityLog({
@@ -383,7 +383,7 @@ const TodayPage = () => {
                               </button>
                             ) : (
                               <button
-                                className="btn-primary flex-1"
+                                className="btn-primary w-full sm:w-auto"
                                 onClick={() => {
                                   setRunner(session);
                                   setRunnerProtocolId(session.protocolRef ?? null);
@@ -412,7 +412,7 @@ const TodayPage = () => {
             <h2 className="section-title">Питание по плану</h2>
             {(Object.keys(mealLabels) as FoodEntry['meal'][]).map(meal => (
               <div key={meal} className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm font-semibold">{mealLabels[meal]}</p>
                   <button className="btn-secondary" onClick={() => openPlanSheet(meal)}>
                     Заменить/добавить из библиотеки
@@ -423,7 +423,7 @@ const TodayPage = () => {
                     {plannedMeals[meal].map(item => (
                       <div
                         key={item.id}
-                        className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200 p-3"
+                        className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between"
                       >
                         <div>
                           <p className="text-sm font-semibold">{getPlannedTitle(item)}</p>
@@ -433,7 +433,7 @@ const TodayPage = () => {
                           </p>
                         </div>
                         <button
-                          className="btn-primary"
+                          className="btn-primary w-full sm:w-auto"
                           onClick={() => addPlannedMealToLog(meal, item)}
                           disabled={item.completed}
                         >
@@ -453,7 +453,7 @@ const TodayPage = () => {
           (requirements.requireWeight || requirements.requireWaist || requiredPhotos.length > 0) ? (
             <div className="card p-4 space-y-3">
               <h2 className="section-title">Фото и измерения</h2>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {requirements.requireWeight ? (
                   <button className="btn-secondary" onClick={() => setSheet('weight')}>
                     Внести вес
@@ -486,7 +486,7 @@ const TodayPage = () => {
           <p className="text-sm text-slate-500">
             На эту дату пока нет плана. Выберите период или создайте план.
           </p>
-          <button className="btn-primary" onClick={() => navigate('/plan')}>
+          <button className="btn-primary w-full" onClick={() => navigate('/plan')}>
             Перейти в планирование
           </button>
         </div>
@@ -648,7 +648,7 @@ const TodayPage = () => {
         )}
 
         <button
-          className="btn-primary"
+          className="btn-primary w-full"
           onClick={() => {
             addFoodEntry(selectedDate, {
               id: '',
@@ -706,7 +706,7 @@ const TodayPage = () => {
           onChange={event => setActivityForm(prev => ({ ...prev, time: event.target.value }))}
         />
         <button
-          className="btn-primary"
+          className="btn-primary w-full"
           onClick={() => {
             addActivityLog({
               id: '',
@@ -739,10 +739,23 @@ const TodayPage = () => {
         <label className="text-sm font-semibold text-slate-600">Стресс (1-5)</label>
         <input
           type="number"
+          min={1}
+          max={5}
           className="input"
           value={smokingForm.stress}
           onChange={event => setSmokingForm(prev => ({ ...prev, stress: Number(event.target.value) }))}
         />
+        <label className="flex items-center gap-3 text-sm text-slate-600">
+          <input
+            type="checkbox"
+            className="h-5 w-5"
+            checked={smokingForm.ruleApplied}
+            onChange={event =>
+              setSmokingForm(prev => ({ ...prev, ruleApplied: event.target.checked }))
+            }
+          />
+          Правило применено
+        </label>
         <label className="text-sm font-semibold text-slate-600">Время</label>
         <input
           type="time"
@@ -751,7 +764,7 @@ const TodayPage = () => {
           onChange={event => setSmokingForm(prev => ({ ...prev, time: event.target.value }))}
         />
         <button
-          className="btn-primary"
+          className="btn-primary w-full"
           onClick={() => {
             addSmokingLog({
               id: '',
@@ -786,7 +799,7 @@ const TodayPage = () => {
           onChange={event => setWeightForm(prev => ({ ...prev, time: event.target.value }))}
         />
         <button
-          className="btn-primary"
+          className="btn-primary w-full"
           onClick={() => {
             addWeightLog({
               id: '',
@@ -811,7 +824,7 @@ const TodayPage = () => {
           }
         />
         <button
-          className="btn-primary"
+          className="btn-primary w-full"
           onClick={() => {
             addWaistLog({ id: '', date: selectedDate, waistCm: waistForm.waistCm });
             setSheet(null);
@@ -838,7 +851,7 @@ const TodayPage = () => {
           className="input"
           onChange={event => setPhotoFile(event.target.files?.[0] ?? null)}
         />
-        <button className="btn-primary" onClick={savePhoto}>
+        <button className="btn-primary w-full" onClick={savePhoto}>
           Сохранить фото
         </button>
       </BottomSheet>
@@ -958,7 +971,7 @@ const TodayPage = () => {
         )}
 
         <button
-          className="btn-primary"
+          className="btn-primary w-full"
           onClick={() => {
             if (!mealSheet) return;
             addMealPlanItem(mealSheet);
@@ -1007,7 +1020,7 @@ const TodayPage = () => {
             </select>
           </div>
           <button
-            className="btn-secondary"
+            className="btn-secondary w-full"
             onClick={() => {
               if (!newDish.name) return;
               updateData(state => {
