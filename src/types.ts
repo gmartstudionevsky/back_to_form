@@ -172,6 +172,7 @@ export type MealComponent = {
 export type WorkoutPlanItem = {
   id: UUID;
   timeOfDay: 'morning' | 'day' | 'evening';
+  plannedTime?: string;
   protocolRef?: UUID;
   isRequired?: boolean;
   kind?: 'workout' | 'movement';

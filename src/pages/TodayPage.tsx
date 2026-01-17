@@ -251,6 +251,22 @@ const TodayPage = () => {
     });
   };
 
+  const updateWorkoutTime = (id: string, time: string) => {
+    updateData(state => {
+      const plan = state.planner.dayPlans.find(item => item.date === selectedDate);
+      if (!plan) return { ...state };
+      plan.workoutsPlan = plan.workoutsPlan.map(item => {
+        if (item.id !== id) return item;
+        return {
+          ...item,
+          plannedTime: time || undefined,
+          timeOfDay: time ? getTimeOfDayFromTime(time) : item.timeOfDay
+        };
+      });
+      return { ...state };
+    });
+  };
+
   const applyMealTemplate = (meal: FoodEntry['meal']) => {
     const template: MealComponentType[] =
       meal === 'breakfast'
@@ -320,7 +336,7 @@ const TodayPage = () => {
           title: mealLabels[meal],
           time: mealTimes[meal],
           timeOfDay: getMealTimeOfDay(meal, mealTimes[meal]),
-          completed: false
+          completed: Boolean(foodDay?.entries.some(entry => entry.meal === meal))
         }))
     : (foodDay?.entries ?? []).map(entry => ({
         id: entry.id,
@@ -344,6 +360,7 @@ const TodayPage = () => {
             ? 'Движение / лестницы'
             : data.library.protocols.find(protocol => protocol.id === item.protocolRef)?.name ??
               'Тренировка',
+        time: item.plannedTime,
         timeOfDay: item.timeOfDay,
         completed: item.completed
       }))
@@ -359,6 +376,13 @@ const TodayPage = () => {
   const editingMeal = mealEdit ?? 'breakfast';
   const editComponents = mealEdit ? mealComponents[mealEdit] : [];
   const editMealTime = mealEdit ? mealTimes[mealEdit] : '';
+  const plannedItemsCount = scheduleMeals.length + scheduleWorkouts.length;
+  const completedItemsCount =
+    scheduleMeals.filter(item => item.completed).length +
+    scheduleWorkouts.filter(item => item.completed).length;
+  const progressPercent = plannedItemsCount
+    ? Math.round((completedItemsCount / plannedItemsCount) * 100)
+    : 0;
 
   return (
     <section className="space-y-4">
@@ -436,78 +460,20 @@ const TodayPage = () => {
             </button>
           </div>
         </div>
-        <div className="space-y-4">
-          {(Object.keys(timeLabels) as WorkoutPlanItem['timeOfDay'][]).map(timeOfDay => {
-            const meals = scheduleMeals.filter(item => item.timeOfDay === timeOfDay);
-            const workouts = scheduleWorkouts.filter(item => item.timeOfDay === timeOfDay);
-            if (meals.length === 0 && workouts.length === 0) return null;
-            return (
-              <div key={timeOfDay} className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  {timeLabels[timeOfDay]}
-                </p>
-                <div className="space-y-2">
-                  {workouts.map(item => (
-                    <div
-                      key={item.id}
-                      className="flex flex-col gap-2 rounded-2xl border border-slate-200 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div>
-                        <p className="font-semibold">{item.title}</p>
-                        <p className="text-xs text-slate-500">Активность</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {item.completed ? <span className="badge">Выполнено</span> : null}
-                        {dayPlan ? (
-                          <button
-                            className="btn-secondary"
-                            onClick={() => scrollToSection('activity-plan')}
-                          >
-                            К плану
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                  {meals.map(item => (
-                    <div
-                      key={item.id}
-                      className="flex flex-col gap-2 rounded-2xl border border-slate-200 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div>
-                        <p className="font-semibold">{item.title}</p>
-                        <p className="text-xs text-slate-500">
-                          {mealLabels[item.meal]}
-                          {item.time ? ` · ${item.time}` : ''}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {item.completed ? <span className="badge">Учтено</span> : null}
-                        {dayPlan ? (
-                          <button
-                            className="btn-secondary"
-                            onClick={() => scrollToSection('meal-plan')}
-                          >
-                            К питанию
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-          {!scheduleMeals.length && !scheduleWorkouts.length ? (
-            <p className="text-sm text-slate-500">
-              Пока нет расписания. Добавьте питание и активность или создайте план.
-            </p>
-          ) : null}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs text-slate-500">
+            <span>
+              Прогресс дня: {completedItemsCount}/{plannedItemsCount || 0}
+            </span>
+            <span>{progressPercent}%</span>
+          </div>
+          <div className="h-2 w-full rounded-full bg-slate-100">
+            <div
+              className="h-2 rounded-full bg-emerald-400"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
         </div>
-      </div>
-
-      <div className="card p-4 space-y-3" id="schedule">
-        <h2 className="section-title">Расписание дня</h2>
         <div className="space-y-4">
           {(Object.keys(timeLabels) as WorkoutPlanItem['timeOfDay'][]).map(timeOfDay => {
             const meals = scheduleMeals.filter(item => item.timeOfDay === timeOfDay);
@@ -519,31 +485,150 @@ const TodayPage = () => {
                   {timeLabels[timeOfDay]}
                 </p>
                 <div className="space-y-2">
-                  {workouts.map(item => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between rounded-2xl border border-slate-200 p-3 text-sm"
-                    >
-                      <div>
-                        <p className="font-semibold">{item.title}</p>
-                        <p className="text-xs text-slate-500">Активность</p>
+                  {workouts.map(item => {
+                    const session = plannedWorkouts.find(workout => workout.id === item.id);
+                    const isMovement =
+                      session?.kind === 'movement' || !session?.protocolRef || !session;
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-3 text-sm"
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="font-semibold">{item.title}</p>
+                            <p className="text-xs text-slate-500">
+                              Активность{item.time ? ` · ${item.time}` : ''}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {item.completed ? <span className="badge">Выполнено</span> : null}
+                            {dayPlan ? (
+                              <button
+                                className="btn-secondary"
+                                onClick={() => scrollToSection('activity-plan')}
+                              >
+                                К плану
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                        {dayPlan ? (
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <label className="text-xs text-slate-500">
+                              Время
+                              <input
+                                type="time"
+                                className="input mt-1"
+                                value={item.time ?? ''}
+                                onChange={event => updateWorkoutTime(item.id, event.target.value)}
+                              />
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                              {!item.completed ? (
+                                isMovement ? (
+                                  <button
+                                    className="btn-secondary w-full sm:w-auto"
+                                    onClick={() => {
+                                      const minutes = session?.plannedMinutes ?? 10;
+                                      addActivityLog({
+                                        id: '',
+                                        dateTime: toDateTime(selectedDate, item.time ?? ''),
+                                        type: 'march',
+                                        minutes
+                                      });
+                                      updateData(state => {
+                                        const plan = state.planner.dayPlans.find(
+                                          planItem => planItem.date === selectedDate
+                                        );
+                                        if (!plan) return { ...state };
+                                        plan.workoutsPlan = plan.workoutsPlan.map(planItem =>
+                                          planItem.id === item.id
+                                            ? {
+                                                ...planItem,
+                                                completed: true,
+                                                completedMinutes: minutes
+                                              }
+                                            : planItem
+                                        );
+                                        return { ...state };
+                                      });
+                                    }}
+                                  >
+                                    Отметить активность
+                                  </button>
+                                ) : (
+                                  <button
+                                    className="btn-primary w-full sm:w-auto"
+                                    onClick={() => {
+                                      if (!session) return;
+                                      setRunner(session);
+                                      setRunnerProtocolId(session.protocolRef ?? null);
+                                    }}
+                                  >
+                                    Запустить
+                                  </button>
+                                )
+                              ) : null}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
-                      {item.completed ? <span className="badge">Выполнено</span> : null}
-                    </div>
-                  ))}
+                    );
+                  })}
                   {meals.map(item => (
                     <div
                       key={item.id}
-                      className="flex items-center justify-between rounded-2xl border border-slate-200 p-3 text-sm"
+                      className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-3 text-sm"
                     >
-                      <div>
-                        <p className="font-semibold">{item.title}</p>
-                        <p className="text-xs text-slate-500">
-                          {mealLabels[item.meal]}
-                          {item.time ? ` · ${item.time}` : ''}
-                        </p>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="font-semibold">{item.title}</p>
+                          <p className="text-xs text-slate-500">
+                            {mealLabels[item.meal]}
+                            {item.time ? ` · ${item.time}` : ''}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {item.completed ? <span className="badge">Учтено</span> : null}
+                          {dayPlan ? (
+                            <button
+                              className="btn-secondary"
+                              onClick={() => scrollToSection('meal-plan')}
+                            >
+                              К питанию
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
-                      {item.completed ? <span className="badge">Учтено</span> : null}
+                      {dayPlan ? (
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <label className="text-xs text-slate-500">
+                            Время
+                            <input
+                              type="time"
+                              className="input mt-1"
+                              value={mealTimes[item.meal] ?? ''}
+                              onChange={event => updateMealTime(item.meal, event.target.value)}
+                            />
+                          </label>
+                          {!item.completed ? (
+                            <button
+                              className="btn-secondary w-full sm:w-auto"
+                              onClick={() => {
+                                setFoodForm(prev => ({
+                                  ...prev,
+                                  meal: item.meal,
+                                  time: mealTimes[item.meal] ?? ''
+                                }));
+                                setSheet('food');
+                              }}
+                            >
+                              Отметить прием
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -602,6 +687,15 @@ const TodayPage = () => {
                           </div>
                           <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
                             <label className="text-xs text-slate-500">
+                              Время
+                              <input
+                                type="time"
+                                className="input mt-1"
+                                value={session.plannedTime ?? ''}
+                                onChange={event => updateWorkoutTime(session.id, event.target.value)}
+                              />
+                            </label>
+                            <label className="text-xs text-slate-500">
                               Время суток
                               <select
                                 className="input mt-1"
@@ -636,7 +730,7 @@ const TodayPage = () => {
                                   const minutes = session.plannedMinutes ?? 10;
                                   addActivityLog({
                                     id: '',
-                                    dateTime: toDateTime(selectedDate, ''),
+                                    dateTime: toDateTime(selectedDate, session.plannedTime ?? ''),
                                     type: 'march',
                                     minutes
                                   });
