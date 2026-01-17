@@ -11,8 +11,7 @@ import {
   SmokingLog,
   WaistLog,
   WeightLog,
-  MovementSessionLog,
-  GeoPoint
+  MovementSessionLog
 } from '../types';
 
 const tabs = ['Питание', 'Тренировки', 'Движение', 'Курение', 'Измерения', 'Сон'] as const;
@@ -67,20 +66,7 @@ const TrackPage = () => {
   const [weightDraft, setWeightDraft] = useState<WeightLog | null>(null);
   const [waistDraft, setWaistDraft] = useState<WaistLog | null>(null);
   const [sleepDraft, setSleepDraft] = useState<SleepLog | null>(null);
-  const [movementActivityId, setMovementActivityId] = useState(
-    data.library.movementActivities[0]?.id ?? ''
-  );
-  const [movementPlannedFlights, setMovementPlannedFlights] = useState(10);
   const [movementSteps, setMovementSteps] = useState(0);
-  const [movementDurationMinutes, setMovementDurationMinutes] = useState(20);
-  const [movementTimer, setMovementTimer] = useState({
-    running: false,
-    startedAt: 0,
-    elapsedSec: 0,
-    durationSec: 0
-  });
-  const [movementStartLocation, setMovementStartLocation] = useState<GeoPoint | null>(null);
-  const [movementGeoStatus, setMovementGeoStatus] = useState<string | null>(null);
 
   const dayPlan = data.planner.dayPlans.find(plan => plan.date === selectedDate);
   const foodDay = data.logs.foodDays.find(day => day.date === selectedDate);
@@ -151,83 +137,12 @@ const TrackPage = () => {
   const movementSessions = data.logs.movementSessions.filter(
     log => log.dateTime.slice(0, 10) === selectedDate
   );
-  const plannedMovement = dayPlan?.workoutsPlan.find(item => item.kind === 'movement');
-  const plannedMovementActivityId = plannedMovement?.movementActivityRef;
-  const plannedMovementSessionMinutes = plannedMovement?.plannedMinutes ?? 20;
-  const plannedMovementActivityName = plannedMovementActivityId
-    ? data.library.movementActivities.find(activity => activity.id === plannedMovementActivityId)
-        ?.name
-    : undefined;
-  const defaultMovementActivityId =
-    plannedMovementActivityId ??
-    data.library.movementActivities[0]?.id ??
-    '';
+  const defaultMovementActivityId = data.library.movementActivities[0]?.id ?? '';
 
   useEffect(() => {
     setMovementSteps(movementDay?.steps ?? 0);
   }, [movementDay?.steps, selectedDate]);
 
-  useEffect(() => {
-    if (!defaultMovementActivityId) return;
-    setMovementActivityId(defaultMovementActivityId);
-  }, [defaultMovementActivityId, selectedDate]);
-
-  useEffect(() => {
-    setMovementDurationMinutes(plannedMovementSessionMinutes);
-  }, [plannedMovementSessionMinutes, selectedDate]);
-
-  useEffect(() => {
-    if (!movementTimer.running) return;
-    const id = window.setInterval(() => {
-      setMovementTimer(prev => {
-        const elapsedSec = Math.floor((Date.now() - prev.startedAt) / 1000);
-        return {
-          ...prev,
-          elapsedSec: Math.min(elapsedSec, prev.durationSec)
-        };
-      });
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [movementTimer.running]);
-
-  useEffect(() => {
-    if (!movementTimer.running) return;
-    if (movementTimer.elapsedSec < movementTimer.durationSec) return;
-    stopMovementSession({ elapsedSec: movementTimer.durationSec });
-  }, [movementTimer.elapsedSec, movementTimer.durationSec, movementTimer.running]);
-
-  const requestLocation = () =>
-    new Promise<GeoPoint | null>(resolve => {
-      if (!navigator.geolocation) {
-        setMovementGeoStatus('Геолокация недоступна в этом браузере.');
-        resolve(null);
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(
-        position => {
-          const point = { lat: position.coords.latitude, lng: position.coords.longitude };
-          setMovementGeoStatus('Геолокация обновлена.');
-          resolve(point);
-        },
-        () => {
-          setMovementGeoStatus('Не удалось получить геолокацию.');
-          resolve(null);
-        }
-      );
-    });
-
-  const calcDistanceKm = (start: GeoPoint, end: GeoPoint) => {
-    const toRad = (value: number) => (value * Math.PI) / 180;
-    const radius = 6371;
-    const dLat = toRad(end.lat - start.lat);
-    const dLon = toRad(end.lng - start.lng);
-    const lat1 = toRad(start.lat);
-    const lat2 = toRad(end.lat);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.sin(dLon / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
-    return 2 * radius * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  };
 
   const openNewFood = () => {
     setFoodSheet({
@@ -304,7 +219,7 @@ const TrackPage = () => {
         id: '',
         dateTime: toDateTime(selectedDate, ''),
         activityRef,
-        durationMinutes: plannedMovementSessionMinutes,
+        durationMinutes: 20,
         plannedFlights: 10,
         timeOfDay: getTimeOfDayFromDateTime(new Date().toISOString())
       }
@@ -323,59 +238,6 @@ const TrackPage = () => {
       addMovementSessionLog(payload);
     }
     setMovementDraft(null);
-  };
-
-  const formatElapsed = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const startMovementSession = async () => {
-    if (
-      !movementActivityId ||
-      !Number.isFinite(movementDurationMinutes) ||
-      movementDurationMinutes <= 0
-    )
-      return;
-    setMovementGeoStatus('Запрашиваем геолокацию…');
-    const startLocation = await requestLocation();
-    setMovementStartLocation(startLocation);
-    setMovementTimer({
-      running: true,
-      startedAt: Date.now(),
-      elapsedSec: 0,
-      durationSec: movementDurationMinutes * 60
-    });
-  };
-
-  const stopMovementSession = async ({ elapsedSec }: { elapsedSec?: number } = {}) => {
-    if (!movementTimer.running) return;
-    const finalElapsedSec =
-      typeof elapsedSec === 'number' ? elapsedSec : movementTimer.elapsedSec;
-    const startedAt = movementTimer.startedAt;
-    setMovementTimer(prev => ({ ...prev, running: false }));
-    setMovementGeoStatus('Фиксируем завершение…');
-    const endLocation = await requestLocation();
-    const durationMinutes = Math.max(1, Math.round(finalElapsedSec / 60));
-    const distanceKm =
-      movementStartLocation && endLocation
-        ? Math.round(calcDistanceKm(movementStartLocation, endLocation) * 100) / 100
-        : undefined;
-    const activity = data.library.movementActivities.find(item => item.id === movementActivityId);
-    addMovementSessionLog({
-      id: '',
-      dateTime: new Date(startedAt).toISOString(),
-      activityRef: movementActivityId,
-      durationMinutes,
-      distanceKm,
-      startLocation: movementStartLocation ?? undefined,
-      endLocation: endLocation ?? undefined,
-      plannedFlights: activity?.kind === 'stairs' ? movementPlannedFlights : undefined,
-      timeOfDay: getTimeOfDayFromDateTime(new Date(startedAt).toISOString())
-    });
-    setMovementTimer({ running: false, startedAt: 0, elapsedSec: 0, durationSec: 0 });
-    setMovementStartLocation(null);
   };
 
   const openSmoking = (log?: SmokingLog) => {
@@ -659,103 +521,17 @@ const TrackPage = () => {
         <div className="space-y-3">
           <div className="card space-y-4 p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="section-title">План движения</h2>
+              <h2 className="section-title">Движение</h2>
               <button className="btn-secondary w-full sm:w-auto" onClick={() => openMovement()}>
                 Добавить вручную
               </button>
             </div>
 
             <div className="rounded-2xl border border-slate-200 p-3 text-sm">
-              <p className="font-semibold">Запланированная активность</p>
-              <p className="text-xs text-slate-500">
-                {plannedMovement
-                  ? `${plannedMovementActivityName ?? 'Движение'} · ${plannedMovementSessionMinutes} мин${
-                      plannedMovement.plannedTime ? ` · ${plannedMovement.plannedTime}` : ''
-                    }`
-                  : 'Не задано'}
-              </p>
-              <div className="mt-3 space-y-2">
-                <label className="text-xs text-slate-500">
-                  Активность
-                  <select
-                    className="input mt-1"
-                    value={movementActivityId}
-                    onChange={event => setMovementActivityId(event.target.value)}
-                  >
-                    {data.library.movementActivities.map(activity => (
-                      <option key={activity.id} value={activity.id}>
-                        {activity.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-xs text-slate-500">
-                  Время таймера, мин
-                  <input
-                    type="number"
-                    className="input mt-1"
-                    min={1}
-                    value={movementDurationMinutes}
-                    onChange={event => {
-                      const value = Number(event.target.value);
-                      setMovementDurationMinutes(Number.isFinite(value) ? value : 0);
-                    }}
-                  />
-                </label>
-                {data.library.movementActivities.find(item => item.id === movementActivityId)?.kind ===
-                'stairs' ? (
-                  <label className="text-xs text-slate-500">
-                    Пролеты вверх до спуска
-                    <input
-                      type="number"
-                      className="input mt-1"
-                      min={1}
-                      value={movementPlannedFlights}
-                      onChange={event => {
-                        const value = Number(event.target.value);
-                        setMovementPlannedFlights(Number.isFinite(value) ? value : 0);
-                      }}
-                    />
-                  </label>
-                ) : null}
-              </div>
-              <div className="mt-3 rounded-2xl border border-slate-200 p-3 text-sm">
-                <p className="font-semibold">Таймер движения</p>
-                {movementTimer.running ? (
-                  <p className="text-xs text-slate-500">
-                    Осталось:{' '}
-                    {formatElapsed(Math.max(0, movementTimer.durationSec - movementTimer.elapsedSec))}{' '}
-                    · Всего: {formatElapsed(movementTimer.durationSec)}
-                  </p>
-                ) : (
-                  <p className="text-xs text-slate-500">
-                    План таймера: {movementDurationMinutes} мин
-                  </p>
-                )}
-                {movementGeoStatus ? (
-                  <p className="text-xs text-slate-400">Геолокация: {movementGeoStatus}</p>
-                ) : null}
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                  {!movementTimer.running ? (
-                    <button className="btn-primary w-full sm:w-auto" onClick={startMovementSession}>
-                      Выполнить по плану
-                    </button>
-                  ) : (
-                    <button className="btn-secondary w-full sm:w-auto" onClick={stopMovementSession}>
-                      Завершить раньше
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 p-3 text-sm">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-semibold">Шаги за день</p>
-                  <p className="text-xs text-slate-500">
-                    План: {dayPlan?.plannedSteps ?? 'не задан'} · Факт: {movementSteps} шагов
-                  </p>
+                  <p className="text-xs text-slate-500">Факт: {movementSteps} шагов</p>
                 </div>
                 <button
                   className="btn-primary w-full sm:w-auto"
