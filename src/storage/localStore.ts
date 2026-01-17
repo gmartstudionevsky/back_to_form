@@ -3,10 +3,26 @@ import { seedData, schemaVersion } from '../data/seed';
 
 const STORAGE_KEY = 'btf-data';
 
-export const loadData = (): AppData => {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return seedData;
+const safeSetItem = (key: string, value: string) => {
   try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage write failures (private mode, quota, etc.)
+  }
+};
+
+const safeRemoveItem = (key: string) => {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Ignore storage removal failures.
+  }
+};
+
+export const loadData = (): AppData => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return seedData;
     const parsed = JSON.parse(raw) as AppData;
     if (!parsed.schemaVersion || parsed.schemaVersion !== schemaVersion) {
       const migrated: AppData = { ...seedData, ...parsed, schemaVersion };
@@ -52,14 +68,16 @@ export const loadData = (): AppData => {
     }
     return parsed;
   } catch {
+    safeRemoveItem(STORAGE_KEY);
+    safeSetItem(STORAGE_KEY, JSON.stringify(seedData));
     return seedData;
   }
 };
 
 export const saveData = (data: AppData) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  safeSetItem(STORAGE_KEY, JSON.stringify(data));
 };
 
 export const resetData = () => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(seedData));
+  safeSetItem(STORAGE_KEY, JSON.stringify(seedData));
 };

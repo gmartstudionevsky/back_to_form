@@ -7,7 +7,31 @@ import './styles.css';
 const registerSW = () => {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register(`${import.meta.env.BASE_URL}service-worker.js`);
+      let hasReloaded = false;
+      navigator.serviceWorker
+        .register(`${import.meta.env.BASE_URL}service-worker.js`)
+        .then(registration => {
+          registration.update();
+          if (registration.waiting) {
+            registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
+          registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            if (!newWorker) return;
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                newWorker.postMessage({ type: 'SKIP_WAITING' });
+              }
+            });
+          });
+        })
+        .catch(() => undefined);
+
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (hasReloaded) return;
+        hasReloaded = true;
+        window.location.reload();
+      });
     });
   }
 };
