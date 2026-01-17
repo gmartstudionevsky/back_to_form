@@ -50,6 +50,10 @@ const TodayPage = () => {
   const [mealAmount, setMealAmount] = useState({ grams: 150, servings: 1 });
   const [mealTitle, setMealTitle] = useState('');
   const [mealCheatCategory, setMealCheatCategory] = useState<FoodEntry['cheatCategory']>('pizza');
+  const [mealPlannedTime, setMealPlannedTime] = useState('');
+  const [replaceTarget, setReplaceTarget] = useState<{ meal: FoodEntry['meal']; id: string } | null>(
+    null
+  );
   const [newDish, setNewDish] = useState({
     name: '',
     servings: 1,
@@ -135,6 +139,29 @@ const TodayPage = () => {
     return new Date(`${date}T${time}:00`).toISOString();
   };
 
+  const getTimeOfDayFromTime = (time?: string): WorkoutPlanItem['timeOfDay'] => {
+    if (!time) return 'day';
+    const [hourRaw] = time.split(':');
+    const hour = Number(hourRaw);
+    if (Number.isNaN(hour)) return 'day';
+    if (hour < 11) return 'morning';
+    if (hour < 17) return 'day';
+    return 'evening';
+  };
+
+  const getMealTimeOfDay = (meal: FoodEntry['meal'], time?: string) => {
+    if (time) return getTimeOfDayFromTime(time);
+    if (meal === 'breakfast') return 'morning';
+    if (meal === 'dinner') return 'evening';
+    return 'day';
+  };
+
+  const scrollToSection = (id: string) => {
+    const target = document.getElementById(id);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   const getPlannedTitle = (item: MealPlanItem) => {
     if (item.kind === 'product') {
       return data.library.products.find(product => product.id === item.refId)?.name ?? 'Продукт';
@@ -195,7 +222,8 @@ const TodayPage = () => {
         plannedGrams: mealKind === 'product' ? mealAmount.grams : undefined,
         plannedServings: mealKind === 'dish' ? mealAmount.servings : undefined,
         title: mealKind === 'free' || mealKind === 'cheat' ? mealTitle : undefined,
-        cheatCategory: mealKind === 'cheat' ? mealCheatCategory : undefined
+        cheatCategory: mealKind === 'cheat' ? mealCheatCategory : undefined,
+        plannedTime: mealPlannedTime || undefined
       };
       target.mealsPlan[meal].push(newItem);
       return { ...state };
@@ -210,6 +238,24 @@ const TodayPage = () => {
     setMealAmount({ grams: 150, servings: 1 });
     setMealTitle('');
     setMealCheatCategory('pizza');
+    setMealPlannedTime('');
+    setReplaceTarget(null);
+    setSheet('plan');
+  };
+
+  const openReplaceSheet = (meal: FoodEntry['meal'], item: MealPlanItem) => {
+    setMealSheet(meal);
+    setMealSearch('');
+    setMealRefId(item.refId ?? '');
+    setMealKind(item.kind);
+    setMealAmount({
+      grams: item.plannedGrams ?? 150,
+      servings: item.plannedServings ?? 1
+    });
+    setMealTitle(item.title ?? '');
+    setMealCheatCategory(item.cheatCategory ?? 'pizza');
+    setMealPlannedTime(item.plannedTime ?? '');
+    setReplaceTarget({ meal, id: item.id });
     setSheet('plan');
   };
 
@@ -244,6 +290,51 @@ const TodayPage = () => {
     ? data.library.protocols.find(item => item.id === runnerProtocolId)
     : null;
 
+  const scheduleMeals = dayPlan
+    ? (Object.keys(mealLabels) as FoodEntry['meal'][]).flatMap(meal =>
+        (plannedMeals?.[meal] ?? []).map(item => ({
+          id: item.id,
+          meal,
+          title: getPlannedTitle(item),
+          time: item.plannedTime,
+          timeOfDay: getMealTimeOfDay(meal, item.plannedTime),
+          completed: item.completed
+        }))
+      )
+    : (foodDay?.entries ?? []).map(entry => ({
+        id: entry.id,
+        meal: entry.meal,
+        title:
+          entry.kind === 'product'
+            ? data.library.products.find(product => product.id === entry.refId)?.name ?? 'Продукт'
+            : entry.kind === 'dish'
+              ? data.library.recipes.find(recipe => recipe.id === entry.refId)?.name ?? 'Блюдо'
+              : entry.title ?? 'Запись',
+        time: entry.time,
+        timeOfDay: getMealTimeOfDay(entry.meal, entry.time),
+        completed: true
+      }));
+
+  const scheduleWorkouts = dayPlan
+    ? plannedWorkouts.map(item => ({
+        id: item.id,
+        title:
+          item.kind === 'movement' || !item.protocolRef
+            ? 'Движение / лестницы'
+            : data.library.protocols.find(protocol => protocol.id === item.protocolRef)?.name ??
+              'Тренировка',
+        timeOfDay: item.timeOfDay,
+        completed: item.completed
+      }))
+    : data.logs.activity
+        .filter(log => log.dateTime.slice(0, 10) === selectedDate)
+        .map(log => ({
+          id: log.id,
+          title: log.type === 'workout' ? 'Тренировка' : 'Движение',
+          timeOfDay: getTimeOfDayFromTime(log.dateTime.slice(11, 16)),
+          completed: true
+        }));
+
   return (
     <section className="space-y-4">
       <header className="sticky top-0 z-10 -mx-4 bg-slate-50 px-4 pb-3 pt-4">
@@ -272,7 +363,7 @@ const TodayPage = () => {
         </div>
       </header>
 
-      <div className="card p-4">
+      <div className="card p-4" id="summary">
         <h2 className="section-title">Итоги дня</h2>
         <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
           <div className="rounded-xl bg-slate-50 p-3">
@@ -295,6 +386,30 @@ const TodayPage = () => {
       </div>
 
       <div className="card p-4">
+        <h2 className="section-title">Навигация по дню</h2>
+        <div className="mt-3 flex flex-wrap gap-2 text-sm">
+          <button className="btn-secondary" onClick={() => scrollToSection('summary')}>
+            Итоги
+          </button>
+          <button className="btn-secondary" onClick={() => scrollToSection('quick-actions')}>
+            Быстрые действия
+          </button>
+          <button className="btn-secondary" onClick={() => scrollToSection('schedule')}>
+            Расписание
+          </button>
+          <button className="btn-secondary" onClick={() => scrollToSection('meal-plan')}>
+            Питание
+          </button>
+          <button className="btn-secondary" onClick={() => scrollToSection('smoking')}>
+            Курение
+          </button>
+          <button className="btn-secondary" onClick={() => scrollToSection('measurements')}>
+            Фото и измерения
+          </button>
+        </div>
+      </div>
+
+      <div className="card p-4" id="quick-actions">
         <h2 className="section-title">Быстрые действия</h2>
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <button className="btn-primary" onClick={() => setSheet('food')}>
@@ -312,10 +427,62 @@ const TodayPage = () => {
         </div>
       </div>
 
+      <div className="card p-4 space-y-3" id="schedule">
+        <h2 className="section-title">Расписание дня</h2>
+        <div className="space-y-4">
+          {(Object.keys(timeLabels) as WorkoutPlanItem['timeOfDay'][]).map(timeOfDay => {
+            const meals = scheduleMeals.filter(item => item.timeOfDay === timeOfDay);
+            const workouts = scheduleWorkouts.filter(item => item.timeOfDay === timeOfDay);
+            if (meals.length === 0 && workouts.length === 0) return null;
+            return (
+              <div key={timeOfDay} className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  {timeLabels[timeOfDay]}
+                </p>
+                <div className="space-y-2">
+                  {workouts.map(item => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between rounded-2xl border border-slate-200 p-3 text-sm"
+                    >
+                      <div>
+                        <p className="font-semibold">{item.title}</p>
+                        <p className="text-xs text-slate-500">Активность</p>
+                      </div>
+                      {item.completed ? <span className="badge">Выполнено</span> : null}
+                    </div>
+                  ))}
+                  {meals.map(item => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between rounded-2xl border border-slate-200 p-3 text-sm"
+                    >
+                      <div>
+                        <p className="font-semibold">{item.title}</p>
+                        <p className="text-xs text-slate-500">
+                          {mealLabels[item.meal]}
+                          {item.time ? ` · ${item.time}` : ''}
+                        </p>
+                      </div>
+                      {item.completed ? <span className="badge">Учтено</span> : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          {!scheduleMeals.length && !scheduleWorkouts.length ? (
+            <p className="text-sm text-slate-500">
+              Пока нет расписания. Добавьте питание и активность или создайте план.
+            </p>
+          ) : null}
+        </div>
+      </div>
+
       {dayPlan ? (
         <>
           <div className="card p-4 space-y-3">
-            <h2 className="section-title">План на день</h2>
+            <h2 className="section-title">План активностей</h2>
             <div className="space-y-3">
               {(Object.keys(timeLabels) as WorkoutPlanItem['timeOfDay'][]).map(timeOfDay => {
                 const sessions = plannedWorkouts.filter(item => item.timeOfDay === timeOfDay);
@@ -349,7 +516,35 @@ const TodayPage = () => {
                               <span className="badge">Выполнено</span>
                             ) : null}
                           </div>
-                          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <label className="text-xs text-slate-500">
+                              Время суток
+                              <select
+                                className="input mt-1"
+                                value={session.timeOfDay}
+                                onChange={event => {
+                                  const next = event.target.value as WorkoutPlanItem['timeOfDay'];
+                                  updateData(state => {
+                                    const plan = state.planner.dayPlans.find(
+                                      item => item.date === selectedDate
+                                    );
+                                    if (!plan) return { ...state };
+                                    plan.workoutsPlan = plan.workoutsPlan.map(item =>
+                                      item.id === session.id ? { ...item, timeOfDay: next } : item
+                                    );
+                                    return { ...state };
+                                  });
+                                }}
+                              >
+                                {(Object.keys(timeLabels) as WorkoutPlanItem['timeOfDay'][]).map(
+                                  option => (
+                                    <option key={option} value={option}>
+                                      {timeLabels[option]}
+                                    </option>
+                                  )
+                                )}
+                              </select>
+                            </label>
                             {isMovement ? (
                               <button
                                 className="btn-secondary w-full sm:w-auto"
@@ -399,48 +594,85 @@ const TodayPage = () => {
                   </div>
                 );
               })}
-              <div className="rounded-2xl border border-slate-200 p-3">
-                <p className="text-sm font-semibold">Курение</p>
-                <p className="text-xs text-slate-500">
-                  Лимит: {requirements?.smokingTargetMax ?? '—'} · Факт: {cigaretteCount}
-                </p>
-              </div>
             </div>
           </div>
 
-          <div className="card p-4 space-y-3">
+          <div className="card p-4 space-y-3" id="meal-plan">
             <h2 className="section-title">Питание по плану</h2>
             {(Object.keys(mealLabels) as FoodEntry['meal'][]).map(meal => (
               <div key={meal} className="space-y-2">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm font-semibold">{mealLabels[meal]}</p>
                   <button className="btn-secondary" onClick={() => openPlanSheet(meal)}>
-                    Заменить/добавить из библиотеки
+                    Добавить/заменить
                   </button>
                 </div>
                 {plannedMeals?.[meal].length ? (
                   <div className="space-y-2">
-                    {plannedMeals[meal].map(item => (
-                      <div
-                        key={item.id}
-                        className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <div>
-                          <p className="text-sm font-semibold">{getPlannedTitle(item)}</p>
-                          <p className="text-xs text-slate-500">
-                            {formatPlannedAmount(item)}
-                            {item.completed ? ' · выполнено' : ''}
-                          </p>
-                        </div>
-                        <button
-                          className="btn-primary w-full sm:w-auto"
-                          onClick={() => addPlannedMealToLog(meal, item)}
-                          disabled={item.completed}
+                    {plannedMeals[meal].map(item => {
+                      const timeOfDay = getMealTimeOfDay(meal, item.plannedTime);
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-3"
                         >
-                          {item.completed ? 'Готово' : 'Съел по плану'}
-                        </button>
-                      </div>
-                    ))}
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold">{getPlannedTitle(item)}</p>
+                              <p className="text-xs text-slate-500">
+                                {formatPlannedAmount(item)}
+                                {item.plannedTime ? ` · ${item.plannedTime}` : ''}
+                                {item.completed ? ' · выполнено' : ''}
+                              </p>
+                            </div>
+                            <span className="badge">{timeLabels[timeOfDay]}</span>
+                          </div>
+                          <div className="grid gap-2 sm:grid-cols-[auto_1fr_auto] sm:items-center">
+                            <label className="flex items-center gap-2 text-sm text-slate-600">
+                              <input
+                                type="checkbox"
+                                className="h-5 w-5"
+                                checked={Boolean(item.completed)}
+                                onChange={() => {
+                                  if (item.completed) return;
+                                  addPlannedMealToLog(meal, item);
+                                }}
+                              />
+                              Отметить прием пищи
+                            </label>
+                            <label className="text-xs text-slate-500">
+                              Время
+                              <input
+                                type="time"
+                                className="input mt-1"
+                                value={item.plannedTime ?? ''}
+                                onChange={event => {
+                                  const nextTime = event.target.value;
+                                  updateData(state => {
+                                    const plan = state.planner.dayPlans.find(
+                                      planItem => planItem.date === selectedDate
+                                    );
+                                    if (!plan) return { ...state };
+                                    plan.mealsPlan[meal] = plan.mealsPlan[meal].map(planItem =>
+                                      planItem.id === item.id
+                                        ? { ...planItem, plannedTime: nextTime || undefined }
+                                        : planItem
+                                    );
+                                    return { ...state };
+                                  });
+                                }}
+                              />
+                            </label>
+                            <button
+                              className="btn-secondary w-full sm:w-auto"
+                              onClick={() => openReplaceSheet(meal, item)}
+                            >
+                              Заменить
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-xs text-slate-500">Пока пусто</p>
@@ -451,7 +683,7 @@ const TodayPage = () => {
 
           {requirements &&
           (requirements.requireWeight || requirements.requireWaist || requiredPhotos.length > 0) ? (
-            <div className="card p-4 space-y-3">
+            <div className="card p-4 space-y-3" id="measurements">
               <h2 className="section-title">Фото и измерения</h2>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {requirements.requireWeight ? (
@@ -486,11 +718,36 @@ const TodayPage = () => {
           <p className="text-sm text-slate-500">
             На эту дату пока нет плана. Выберите период или создайте план.
           </p>
-          <button className="btn-primary w-full" onClick={() => navigate('/plan')}>
-            Перейти в планирование
-          </button>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button className="btn-primary w-full" onClick={() => navigate('/plan')}>
+              Перейти в планирование
+            </button>
+            <button
+              className="btn-secondary w-full"
+              onClick={() => {
+                createOrGetDayPlan(selectedDate);
+              }}
+            >
+              Создать расписание вручную
+            </button>
+          </div>
         </div>
       )}
+
+      <div className="card p-4 space-y-2" id="smoking">
+        <h2 className="section-title">Курение</h2>
+        <p className="text-sm text-slate-500">
+          Лимит: {requirements?.smokingTargetMax ?? '—'} · Факт: {cigaretteCount}
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button className="btn-secondary" onClick={() => setSheet('smoking')}>
+            Добавить сигарету
+          </button>
+          <button className="btn-secondary" onClick={() => scrollToSection('summary')}>
+            Смотреть сводку
+          </button>
+        </div>
+      </div>
 
       <BottomSheet open={sheet === 'food'} title="Добавить питание" onClose={() => setSheet(null)}>
         <label className="text-sm font-semibold text-slate-600">Тип записи</label>
@@ -970,15 +1227,47 @@ const TodayPage = () => {
           </>
         )}
 
+        <label className="text-sm font-semibold text-slate-600">Время (опционально)</label>
+        <input
+          type="time"
+          className="input"
+          value={mealPlannedTime}
+          onChange={event => setMealPlannedTime(event.target.value)}
+        />
+
         <button
           className="btn-primary w-full"
           onClick={() => {
             if (!mealSheet) return;
-            addMealPlanItem(mealSheet);
+            if (replaceTarget) {
+              updateData(state => {
+                const plan = state.planner.dayPlans.find(item => item.date === selectedDate);
+                if (!plan) return { ...state };
+                plan.mealsPlan[replaceTarget.meal] = plan.mealsPlan[replaceTarget.meal].map(
+                  item =>
+                    item.id === replaceTarget.id
+                      ? {
+                          ...item,
+                          kind: mealKind,
+                          refId: mealKind === 'product' || mealKind === 'dish' ? mealRefId : undefined,
+                          plannedGrams: mealKind === 'product' ? mealAmount.grams : undefined,
+                          plannedServings: mealKind === 'dish' ? mealAmount.servings : undefined,
+                          title: mealKind === 'free' || mealKind === 'cheat' ? mealTitle : undefined,
+                          cheatCategory: mealKind === 'cheat' ? mealCheatCategory : undefined,
+                          plannedTime: mealPlannedTime || undefined,
+                          completed: false
+                        }
+                      : item
+                );
+                return { ...state };
+              });
+            } else {
+              addMealPlanItem(mealSheet);
+            }
             setSheet(null);
           }}
         >
-          Добавить в план
+          {replaceTarget ? 'Сохранить замену' : 'Добавить в план'}
         </button>
 
         <div className="mt-4 border-t border-slate-200 pt-4 space-y-2">
