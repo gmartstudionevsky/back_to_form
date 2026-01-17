@@ -103,6 +103,7 @@ export type DayPlan = {
     dinner: MealPlanItem[];
     snack: MealPlanItem[];
   };
+  plannedSteps?: number;
   mealComponents?: {
     breakfast: MealComponent[];
     lunch: MealComponent[];

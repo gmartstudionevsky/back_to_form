@@ -867,6 +867,13 @@ const TodayPage = () => {
                 Добавить движение
               </button>
             </div>
+            <div className="rounded-2xl border border-slate-200 p-3 text-sm">
+              <p className="font-semibold">Шаги по плану</p>
+              <p className="text-xs text-slate-500">
+                {dayPlan?.plannedSteps ? `${dayPlan.plannedSteps} шагов` : 'Не задано'} · Факт:{' '}
+                {movementDaySteps ?? 0} шагов
+              </p>
+            </div>
             <div className="space-y-3">
               {(Object.keys(timeOfDayLabels) as WorkoutPlanItem['timeOfDay'][]).map(timeOfDay => {
                 const sessions = plannedMovement.filter(item => item.timeOfDay === timeOfDay);
