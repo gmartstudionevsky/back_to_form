@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { BottomSheet } from '../components/BottomSheet';
 import { WorkoutRunner } from '../components/WorkoutRunner';
 import { savePhotoBlob } from '../storage/photoDb';
@@ -69,6 +69,9 @@ const TodayPage = () => {
   const [runner, setRunner] = useState<WorkoutPlanItem | null>(null);
   const [runnerProtocolId, setRunnerProtocolId] = useState<string | null>(null);
   const [mealEdit, setMealEdit] = useState<FoodEntry['meal'] | null>(null);
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const [isNavVisible, setIsNavVisible] = useState(true);
+  const isProgrammaticScroll = useRef(false);
 
   const [foodForm, setFoodForm] = useState({
     kind: 'product' as const,
@@ -187,8 +190,63 @@ const TodayPage = () => {
   const scrollToSection = (id: string) => {
     const target = document.getElementById(id);
     if (!target) return;
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    isProgrammaticScroll.current = true;
+    const headerOffset = headerRef.current?.offsetHeight ?? 0;
+    const targetTop = target.getBoundingClientRect().top + window.scrollY - headerOffset - 8;
+    window.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+    window.setTimeout(() => {
+      isProgrammaticScroll.current = false;
+    }, 500);
   };
+
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+    let ticking = false;
+    let isMobile = window.matchMedia('(max-width: 639px)').matches;
+
+    const updateVisibility = () => {
+      if (!isMobile) {
+        setIsNavVisible(true);
+        lastScrollY = window.scrollY;
+        return;
+      }
+      if (isProgrammaticScroll.current) {
+        setIsNavVisible(true);
+        lastScrollY = window.scrollY;
+        return;
+      }
+      const currentScrollY = window.scrollY;
+      const isScrollingDown = currentScrollY > lastScrollY;
+      const passedThreshold = currentScrollY > 80;
+      setIsNavVisible(!isScrollingDown || !passedThreshold);
+      lastScrollY = currentScrollY;
+    };
+
+    const handleScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(() => {
+        updateVisibility();
+        ticking = false;
+      });
+    };
+
+    const handleResize = () => {
+      isMobile = window.matchMedia('(max-width: 639px)').matches;
+      if (!isMobile) {
+        setIsNavVisible(true);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleResize);
+    updateVisibility();
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   const addMealComponent = (meal: FoodEntry['meal']) => {
     const plan = createOrGetDayPlan(selectedDate);
@@ -408,21 +466,29 @@ const TodayPage = () => {
 
   return (
     <section className="space-y-4">
-      <header className="sticky top-0 z-10 -mx-4 bg-slate-50 px-4 pb-3 pt-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <button className="btn-secondary" onClick={() => setSheet('date')}>
+      <header
+        ref={headerRef}
+        className={`sticky top-0 z-10 -mx-4 bg-slate-50 px-4 pb-2 pt-2 transition-transform duration-200 sm:pb-3 sm:pt-4 ${
+          isNavVisible ? 'translate-y-0' : '-translate-y-full'
+        } sm:translate-y-0`}
+      >
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+          <button
+            className="btn-secondary px-3 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm"
+            onClick={() => setSheet('date')}
+          >
             {formatDate(selectedDate)}
           </button>
-          <div className="grid auto-cols-[minmax(96px,1fr)] grid-flow-col gap-2 overflow-x-auto pb-1 text-xs sm:grid-cols-3 sm:grid-flow-row sm:auto-cols-auto sm:overflow-visible lg:grid-cols-6">
+          <div className="grid auto-cols-[minmax(80px,1fr)] grid-flow-col gap-1.5 overflow-x-auto pb-1 text-[11px] sm:gap-2 sm:text-xs sm:grid-cols-3 sm:grid-flow-row sm:auto-cols-auto sm:overflow-visible lg:grid-cols-6">
             <button
-              className="btn-secondary w-full min-h-[36px] px-3 py-2 text-xs"
+              className="btn-secondary w-full min-h-[30px] px-2.5 py-1.5 text-[11px] sm:min-h-[36px] sm:px-3 sm:py-2 sm:text-xs"
               onClick={() => scrollToSection('schedule')}
             >
               План дня
             </button>
             {dayPlan ? (
               <button
-                className="btn-secondary w-full min-h-[36px] px-3 py-2 text-xs"
+                className="btn-secondary w-full min-h-[30px] px-2.5 py-1.5 text-[11px] sm:min-h-[36px] sm:px-3 sm:py-2 sm:text-xs"
                 onClick={() => scrollToSection('meal-plan')}
               >
                 Питание
@@ -431,13 +497,13 @@ const TodayPage = () => {
             {dayPlan ? (
               <>
                 <button
-                  className="btn-secondary w-full min-h-[36px] px-3 py-2 text-xs"
+                  className="btn-secondary w-full min-h-[30px] px-2.5 py-1.5 text-[11px] sm:min-h-[36px] sm:px-3 sm:py-2 sm:text-xs"
                   onClick={() => scrollToSection('training-plan')}
                 >
                   Тренировки
                 </button>
                 <button
-                  className="btn-secondary w-full min-h-[36px] px-3 py-2 text-xs"
+                  className="btn-secondary w-full min-h-[30px] px-2.5 py-1.5 text-[11px] sm:min-h-[36px] sm:px-3 sm:py-2 sm:text-xs"
                   onClick={() => scrollToSection('movement-plan')}
                 >
                   Движение
@@ -445,13 +511,13 @@ const TodayPage = () => {
               </>
             ) : null}
             <button
-              className="btn-secondary w-full min-h-[36px] px-3 py-2 text-xs"
+              className="btn-secondary w-full min-h-[30px] px-2.5 py-1.5 text-[11px] sm:min-h-[36px] sm:px-3 sm:py-2 sm:text-xs"
               onClick={() => scrollToSection('smoking')}
             >
               Курение
             </button>
             <button
-              className="btn-secondary w-full min-h-[36px] px-3 py-2 text-xs"
+              className="btn-secondary w-full min-h-[30px] px-2.5 py-1.5 text-[11px] sm:min-h-[36px] sm:px-3 sm:py-2 sm:text-xs"
               onClick={() => scrollToSection('water')}
             >
               Вода
@@ -459,7 +525,7 @@ const TodayPage = () => {
             {requirements &&
             (requirements.requireWeight || requirements.requireWaist || requiredPhotos.length > 0) ? (
               <button
-                className="btn-secondary w-full min-h-[36px] px-3 py-2 text-xs"
+                className="btn-secondary w-full min-h-[30px] px-2.5 py-1.5 text-[11px] sm:min-h-[36px] sm:px-3 sm:py-2 sm:text-xs"
                 onClick={() => scrollToSection('measurements')}
               >
                 Измерения
