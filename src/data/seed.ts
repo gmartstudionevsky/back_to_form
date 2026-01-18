@@ -1,6 +1,6 @@
 import { AppData } from '../types';
 
-export const schemaVersion = 11;
+export const schemaVersion = 12;
 
 export const seedData: AppData = {
   schemaVersion,
@@ -221,7 +221,9 @@ export const seedData: AppData = {
         kcalPer100g: 143,
         proteinPer100g: 13,
         fatPer100g: 10,
-        portionPresets: [{ label: '3 яйца', grams: 150 }]
+        portionPresets: [{ label: '3 яйца', grams: 150 }],
+        pieceGrams: 50,
+        pieceLabel: 'шт.'
       },
       {
         id: 'prod-greek-yogurt',
@@ -328,7 +330,9 @@ export const seedData: AppData = {
         name: 'Банан (approx)',
         kcalPer100g: 89,
         nutritionTags: ['snack'],
-        portionPresets: [{ label: '1 банан', grams: 120 }]
+        portionPresets: [{ label: '1 банан', grams: 120 }],
+        pieceGrams: 120,
+        pieceLabel: 'шт.'
       },
       {
         id: 'prod-apple',
@@ -336,7 +340,9 @@ export const seedData: AppData = {
         kcalPer100g: 52,
         nutritionTags: ['snack', 'healthy'],
         portionPresets: [{ label: '1 яблоко', grams: 150 }],
-        hydrationContribution: true
+        hydrationContribution: true,
+        pieceGrams: 150,
+        pieceLabel: 'шт.'
       },
       {
         id: 'prod-oats',
@@ -1245,6 +1251,13 @@ export const seedData: AppData = {
       { label: '1 порция', grams: 200 },
       { label: '1/2 тарелки', grams: 150 },
       { label: '2 котлеты', grams: 220 }
+    ],
+    dishPortions: [
+      { label: '1 порция', servings: 1 },
+      { label: '1/2 порции', servings: 0.5 },
+      { label: '1.5 порции', servings: 1.5 },
+      { label: '1 тарелка', servings: 1 },
+      { label: 'маленькая порция', servings: 0.7 }
     ]
   }
 };

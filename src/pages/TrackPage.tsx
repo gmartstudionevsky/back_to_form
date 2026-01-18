@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { BottomSheet } from '../components/BottomSheet';
 import { useAppStore } from '../store/useAppStore';
-import { calcFoodEntry, calcMealPlanItem } from '../utils/nutrition';
+import { calcFoodEntry, calcMealPlanItem, resolveProductGrams } from '../utils/nutrition';
 import { combineDateTime, currentTimeString, todayISO } from '../utils/date';
 import { getTimeOfDayFromDateTime, timeOfDayLabels } from '../utils/timeOfDay';
 import {
@@ -33,6 +33,7 @@ type FoodDraft = FoodEntry & {
   proteinOverrideText?: string;
   fatOverrideText?: string;
   carbOverrideText?: string;
+  portionMode?: 'grams' | 'pieces';
 };
 
 const mealLabels: Record<FoodEntry['meal'], string> = {
@@ -101,6 +102,12 @@ const TrackPage = () => {
     portionsCount: 1,
     time: currentTimeString()
   }));
+  const sheetProduct =
+    foodSheet?.kind === 'product'
+      ? data.library.products.find(product => product.id === foodSheet.refId)
+      : undefined;
+  const sheetProductSupportsPieces = Boolean(sheetProduct?.pieceGrams);
+  const sheetPieceLabel = sheetProduct?.pieceLabel ?? 'шт.';
 
   const dayPlan = data.planner.dayPlans.find(plan => plan.date === selectedDate);
   const foodDay = data.logs.foodDays.find(day => day.date === selectedDate);
@@ -115,10 +122,11 @@ const TrackPage = () => {
     return sum + log.portionMl * log.portionsCount * factor;
   }, 0);
   const foodHydrationMl = (foodDay?.entries ?? []).reduce((sum, entry) => {
-    if (entry.kind === 'product' && entry.refId && entry.grams) {
+    if (entry.kind === 'product' && entry.refId) {
       const product = data.library.products.find(item => item.id === entry.refId);
       if (!product?.hydrationContribution) return sum;
-      return sum + entry.grams;
+      const grams = resolveProductGrams(product, entry.grams, entry.pieces);
+      return sum + grams;
     }
     if (entry.kind === 'dish' && entry.refId) {
       const recipe = data.library.recipes.find(item => item.id === entry.refId);
@@ -387,7 +395,10 @@ const TrackPage = () => {
       kind: 'dish',
       refId: '',
       grams: 120,
+      pieces: 1,
+      portionMode: 'grams',
       servings: 1,
+      portionLabel: '',
       time: currentTimeString(),
       title: '',
       kcalOverrideText: '',
@@ -439,8 +450,16 @@ const TrackPage = () => {
       id: foodSheet.id,
       kind: foodSheet.kind,
       refId: foodSheet.refId || undefined,
-      grams: foodSheet.kind === 'product' ? foodSheet.grams : undefined,
+      grams:
+        foodSheet.kind === 'product' && foodSheet.portionMode === 'grams'
+          ? foodSheet.grams
+          : undefined,
+      pieces:
+        foodSheet.kind === 'product' && foodSheet.portionMode === 'pieces'
+          ? foodSheet.pieces
+          : undefined,
       servings: foodSheet.kind === 'dish' ? foodSheet.servings : undefined,
+      portionLabel: foodSheet.kind === 'dish' ? foodSheet.portionLabel : undefined,
       meal: foodSheet.meal,
       time: foodSheet.time || undefined,
       title: foodSheet.kind === 'free' || foodSheet.kind === 'cheat' ? foodSheet.title : undefined,
@@ -761,53 +780,74 @@ const TrackPage = () => {
               <div key={meal} className="card p-4">
                 <h3 className="text-sm font-semibold text-slate-500">{mealLabels[meal]}</h3>
                 <div className="mt-3 space-y-2">
-                  {entries.map(entry => (
-                    <div key={entry.id} className="rounded-xl border border-slate-200 p-3">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <p className="text-sm font-semibold">
-                            {entry.kind === 'product'
-                              ? data.library.products.find(prod => prod.id === entry.refId)?.name
-                              : entry.kind === 'dish'
-                              ? data.library.recipes.find(rec => rec.id === entry.refId)?.name
-                              : entry.title || (entry.kind === 'cheat' ? 'Читмил' : 'Свободная запись')}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            {entry.time ? `${entry.time} · ` : ''}
-                            {entry.grams ? `${entry.grams} г` : ''}
-                            {entry.servings ? `${entry.servings} порц.` : ''}
-                            {entry.kcalOverride ? `${entry.kcalOverride} ккал` : ''}
-                          </p>
-                          {renderNutritionTags(entry.nutritionTags)}
-                        </div>
-                        {!isReadOnly && (
-                          <div className="flex flex-col gap-2 sm:flex-row">
-                            <button
-                              className="btn-secondary w-full sm:w-auto"
-                              onClick={() =>
-                                setFoodSheet({
-                                  ...entry,
-                                  date: selectedDate,
-                                  kcalOverrideText: entry.kcalOverride?.toString() ?? '',
-                                  proteinOverrideText: entry.proteinOverride?.toString() ?? '',
-                                  fatOverrideText: entry.fatOverride?.toString() ?? '',
-                                  carbOverrideText: entry.carbOverride?.toString() ?? ''
-                                })
-                              }
-                            >
-                              Изменить
-                            </button>
-                            <button
-                              className="btn-secondary w-full text-red-500 sm:w-auto"
-                              onClick={() => deleteFoodEntry(selectedDate, entry.id)}
-                            >
-                              Удалить
-                            </button>
+                  {entries.map(entry => {
+                    const product =
+                      entry.kind === 'product'
+                        ? data.library.products.find(prod => prod.id === entry.refId)
+                        : undefined;
+                    const recipe =
+                      entry.kind === 'dish'
+                        ? data.library.recipes.find(rec => rec.id === entry.refId)
+                        : undefined;
+                    const pieceLabel = product?.pieceLabel ?? 'шт.';
+                    const infoParts = [
+                      entry.time,
+                      entry.grams ? `${entry.grams} г` : '',
+                      entry.pieces ? `${entry.pieces} ${pieceLabel}` : '',
+                      entry.portionLabel
+                        ? entry.portionLabel
+                        : entry.servings
+                        ? `${entry.servings} порц.`
+                        : '',
+                      entry.kcalOverride ? `${entry.kcalOverride} ккал` : ''
+                    ].filter(Boolean);
+                    return (
+                      <div key={entry.id} className="rounded-xl border border-slate-200 p-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold">
+                              {entry.kind === 'product'
+                                ? product?.name
+                                : entry.kind === 'dish'
+                                ? recipe?.name
+                                : entry.title ||
+                                  (entry.kind === 'cheat' ? 'Читмил' : 'Свободная запись')}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {infoParts.length > 0 ? infoParts.join(' · ') : '—'}
+                            </p>
+                            {renderNutritionTags(entry.nutritionTags)}
                           </div>
-                        )}
+                          {!isReadOnly && (
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                              <button
+                                className="btn-secondary w-full sm:w-auto"
+                                onClick={() =>
+                                  setFoodSheet({
+                                    ...entry,
+                                    date: selectedDate,
+                                    kcalOverrideText: entry.kcalOverride?.toString() ?? '',
+                                    proteinOverrideText: entry.proteinOverride?.toString() ?? '',
+                                    fatOverrideText: entry.fatOverride?.toString() ?? '',
+                                    carbOverrideText: entry.carbOverride?.toString() ?? '',
+                                    portionMode: entry.pieces ? 'pieces' : 'grams'
+                                  })
+                                }
+                              >
+                                Изменить
+                              </button>
+                              <button
+                                className="btn-secondary w-full text-red-500 sm:w-auto"
+                                onClick={() => deleteFoodEntry(selectedDate, entry.id)}
+                              >
+                                Удалить
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))
@@ -1364,48 +1404,48 @@ const TrackPage = () => {
         >
           {foodSheet && (
             <>
-            <label className="text-sm font-semibold text-slate-600">Тип записи</label>
-            <select
-              className="input"
-              value={foodSheet.kind}
-              onChange={event =>
-                setFoodSheet(prev =>
-                  prev ? { ...prev, kind: event.target.value as FoodEntry['kind'] } : prev
-                )
-              }
-            >
-              <option value="dish">Блюдо</option>
-              <option value="product">Продукт</option>
-              <option value="free">Свободная</option>
-              <option value="cheat">Читмил</option>
-            </select>
+              <label className="text-sm font-semibold text-slate-600">Тип записи</label>
+              <select
+                className="input"
+                value={foodSheet.kind}
+                onChange={event =>
+                  setFoodSheet(prev =>
+                    prev ? { ...prev, kind: event.target.value as FoodEntry['kind'] } : prev
+                  )
+                }
+              >
+                <option value="dish">Блюдо</option>
+                <option value="product">Продукт</option>
+                <option value="free">Свободная</option>
+                <option value="cheat">Читмил</option>
+              </select>
 
-            <label className="text-sm font-semibold text-slate-600">Приём пищи</label>
-            <select
-              className="input"
-              value={foodSheet.meal}
-              onChange={event =>
-                setFoodSheet(prev =>
-                  prev ? { ...prev, meal: event.target.value as FoodEntry['meal'] } : prev
-                )
-              }
-            >
-              {Object.entries(mealLabels).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
+              <label className="text-sm font-semibold text-slate-600">Приём пищи</label>
+              <select
+                className="input"
+                value={foodSheet.meal}
+                onChange={event =>
+                  setFoodSheet(prev =>
+                    prev ? { ...prev, meal: event.target.value as FoodEntry['meal'] } : prev
+                  )
+                }
+              >
+                {Object.entries(mealLabels).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
 
-            <label className="text-sm font-semibold text-slate-600">Время</label>
-            <input
-              type="time"
-              className="input"
-              value={foodSheet.time ?? ''}
-              onChange={event =>
-                setFoodSheet(prev => (prev ? { ...prev, time: event.target.value } : prev))
-              }
-            />
+              <label className="text-sm font-semibold text-slate-600">Время</label>
+              <input
+                type="time"
+                className="input"
+                value={foodSheet.time ?? ''}
+                onChange={event =>
+                  setFoodSheet(prev => (prev ? { ...prev, time: event.target.value } : prev))
+                }
+              />
 
             {foodSheet.kind !== 'free' && foodSheet.kind !== 'cheat' && (
               <>
@@ -1429,10 +1469,16 @@ const TrackPage = () => {
                     setFoodSheet(prev => {
                       if (!prev) return prev;
                       const refId = event.target.value;
-                      const tags =
-                        data.library.products.find(product => product.id === refId)?.nutritionTags ??
-                        [];
-                      return { ...prev, refId, nutritionTags: tags };
+                      const product = data.library.products.find(item => item.id === refId);
+                      const tags = product?.nutritionTags ?? [];
+                      const supportsPieces = Boolean(product?.pieceGrams);
+                      return {
+                        ...prev,
+                        refId,
+                        nutritionTags: tags,
+                        portionMode: supportsPieces ? 'pieces' : 'grams',
+                        pieces: supportsPieces ? prev.pieces ?? 1 : prev.pieces
+                      };
                     })
                   }
                 >
@@ -1443,43 +1489,88 @@ const TrackPage = () => {
                     </option>
                   ))}
                 </select>
-                <label className="text-sm font-semibold text-slate-600">Граммы</label>
-                <input
-                  type="number"
-                  className="input"
-                  value={foodSheet.grams ?? 0}
-                  onChange={event =>
-                    setFoodSheet(prev =>
-                      prev ? { ...prev, grams: Number(event.target.value) } : prev
-                    )
-                  }
-                />
-                <div className="control-row">
-                  {data.library.products
-                    .find(product => product.id === foodSheet.refId)
-                    ?.portionPresets?.map(preset => (
-                      <button
-                        key={preset.label}
-                        className="btn-secondary"
-                        onClick={() =>
-                          setFoodSheet(prev => (prev ? { ...prev, grams: preset.grams } : prev))
-                        }
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  {data.presets.portions.map(preset => (
+                {sheetProductSupportsPieces ? (
+                  <div className="flex gap-2">
                     <button
-                      key={preset.label}
-                      className="btn-secondary"
+                      className={foodSheet.portionMode === 'pieces' ? 'btn-primary' : 'btn-secondary'}
                       onClick={() =>
-                        setFoodSheet(prev => (prev ? { ...prev, grams: preset.grams } : prev))
+                        setFoodSheet(prev => (prev ? { ...prev, portionMode: 'pieces' } : prev))
                       }
                     >
-                      {preset.label}
+                      Штуки
                     </button>
-                  ))}
-                </div>
+                    <button
+                      className={foodSheet.portionMode === 'grams' ? 'btn-primary' : 'btn-secondary'}
+                      onClick={() =>
+                        setFoodSheet(prev => (prev ? { ...prev, portionMode: 'grams' } : prev))
+                      }
+                    >
+                      Граммы
+                    </button>
+                  </div>
+                ) : null}
+                {(!sheetProductSupportsPieces || foodSheet.portionMode === 'grams') && (
+                  <>
+                    <label className="text-sm font-semibold text-slate-600">Граммы</label>
+                    <input
+                      type="number"
+                      className="input"
+                      value={foodSheet.grams ?? 0}
+                      onChange={event =>
+                        setFoodSheet(prev =>
+                          prev ? { ...prev, grams: Number(event.target.value) } : prev
+                        )
+                      }
+                    />
+                    <div className="control-row">
+                      {data.library.products
+                        .find(product => product.id === foodSheet.refId)
+                        ?.portionPresets?.map(preset => (
+                          <button
+                            key={preset.label}
+                            className="btn-secondary"
+                            onClick={() =>
+                              setFoodSheet(prev =>
+                                prev ? { ...prev, grams: preset.grams, portionMode: 'grams' } : prev
+                              )
+                            }
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      {data.presets.portions.map(preset => (
+                        <button
+                          key={preset.label}
+                          className="btn-secondary"
+                          onClick={() =>
+                            setFoodSheet(prev =>
+                              prev ? { ...prev, grams: preset.grams, portionMode: 'grams' } : prev
+                            )
+                          }
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {sheetProductSupportsPieces && foodSheet.portionMode === 'pieces' && (
+                  <>
+                    <label className="text-sm font-semibold text-slate-600">
+                      Количество ({sheetPieceLabel})
+                    </label>
+                    <input
+                      type="number"
+                      className="input"
+                      value={foodSheet.pieces ?? 1}
+                      onChange={event =>
+                        setFoodSheet(prev =>
+                          prev ? { ...prev, pieces: Number(event.target.value) } : prev
+                        )
+                      }
+                    />
+                  </>
+                )}
               </>
             )}
 
@@ -1507,7 +1598,7 @@ const TrackPage = () => {
                     </option>
                   ))}
                 </select>
-                <label className="text-sm font-semibold text-slate-600">Порции</label>
+                <label className="text-sm font-semibold text-slate-600">Порции (для расчётов)</label>
                 <input
                   type="number"
                   className="input"
@@ -1518,6 +1609,34 @@ const TrackPage = () => {
                     )
                   }
                 />
+                <label className="text-sm font-semibold text-slate-600">Описание порции</label>
+                <input
+                  className="input"
+                  placeholder="Например: 1 тарелка"
+                  value={foodSheet.portionLabel ?? ''}
+                  onChange={event =>
+                    setFoodSheet(prev =>
+                      prev ? { ...prev, portionLabel: event.target.value } : prev
+                    )
+                  }
+                />
+                <div className="control-row">
+                  {data.presets.dishPortions.map(preset => (
+                    <button
+                      key={preset.label}
+                      className="btn-secondary"
+                      onClick={() =>
+                        setFoodSheet(prev =>
+                          prev
+                            ? { ...prev, servings: preset.servings, portionLabel: preset.label }
+                            : prev
+                        )
+                      }
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
               </>
             )}
 

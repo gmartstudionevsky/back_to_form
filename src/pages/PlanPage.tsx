@@ -14,7 +14,7 @@ import {
   TimeOfDay,
   WorkoutPlanItem
 } from '../types';
-import { calcMealPlanItem } from '../utils/nutrition';
+import { calcMealPlanItem, resolveProductGrams } from '../utils/nutrition';
 import { todayISO } from '../utils/date';
 import {
   getDefaultMealTime,
@@ -33,7 +33,10 @@ type MealDraft = {
   refId?: string;
   title: string;
   grams: number;
+  pieces: number;
+  portionMode: 'grams' | 'pieces';
   servings: number;
+  portionLabel: string;
   cheatCategory: MealPlanItem['cheatCategory'];
   nutritionTags: NutritionTag[];
   plannedKcal: string;
@@ -138,6 +141,12 @@ const PlanPage = () => {
     endDate: ''
   });
   const canAddPeriod = Boolean(startDate && endDate && startDate <= endDate);
+  const mealSheetProduct =
+    mealSheet?.kind === 'product'
+      ? data.library.products.find(product => product.id === mealSheet.refId)
+      : undefined;
+  const mealSheetSupportsPieces = Boolean(mealSheetProduct?.pieceGrams);
+  const mealSheetPieceLabel = mealSheetProduct?.pieceLabel ?? 'шт.';
   const canCopyMenu = Boolean(
     menuCopy.sourceDate && menuCopy.startDate && menuCopy.endDate && menuCopy.startDate <= menuCopy.endDate
   );
@@ -722,8 +731,16 @@ const PlanPage = () => {
         kind: mealSheet.kind,
         refId:
           mealSheet.kind === 'product' || mealSheet.kind === 'dish' ? mealSheet.refId : undefined,
-        plannedGrams: mealSheet.kind === 'product' ? mealSheet.grams : undefined,
+        plannedGrams:
+          mealSheet.kind === 'product' && mealSheet.portionMode === 'grams'
+            ? mealSheet.grams
+            : undefined,
+        plannedPieces:
+          mealSheet.kind === 'product' && mealSheet.portionMode === 'pieces'
+            ? mealSheet.pieces
+            : undefined,
         plannedServings: mealSheet.kind === 'dish' ? mealSheet.servings : undefined,
+        plannedPortionLabel: mealSheet.kind === 'dish' ? mealSheet.portionLabel : undefined,
         title: mealSheet.kind === 'free' || mealSheet.kind === 'cheat' ? mealSheet.title : undefined,
         plannedKcal:
           mealSheet.kind === 'free' || mealSheet.kind === 'cheat'
@@ -965,8 +982,16 @@ const PlanPage = () => {
       Object.values(plan.mealsPlan)
         .flat()
         .forEach(item => {
-          if (item.kind === 'product' && item.refId && item.plannedGrams) {
-            addProduct(item.refId, item.plannedGrams);
+          if (item.kind === 'product' && item.refId) {
+            const product = data.library.products.find(product => product.id === item.refId);
+            const grams = resolveProductGrams(
+              product,
+              item.plannedGrams,
+              item.plannedPieces
+            );
+            if (grams) {
+              addProduct(item.refId, grams);
+            }
           }
           if (item.kind === 'dish' && item.refId) {
             const recipe = data.library.recipes.find(rec => rec.id === item.refId);
@@ -1886,7 +1911,10 @@ const PlanPage = () => {
                               refId: '',
                               title: '',
                               grams: 120,
+                              pieces: 1,
+                              portionMode: 'grams',
                               servings: 1,
+                              portionLabel: '',
                               cheatCategory: 'pizza',
                               nutritionTags: [],
                               plannedKcal: '',
@@ -1927,46 +1955,65 @@ const PlanPage = () => {
                         {dayPlan.mealsPlan[meal].length === 0 ? (
                           <p className="text-xs text-slate-500">Нет блюд</p>
                         ) : (
-                          dayPlan.mealsPlan[meal].map(item => (
-                            <div
-                              key={item.id}
-                              className="flex flex-col gap-2 rounded-lg border border-slate-200 p-2 text-sm"
-                            >
-                              <div>
-                                {item.kind === 'dish'
-                                  ? data.library.recipes.find(recipe => recipe.id === item.refId)?.name
-                                  : item.kind === 'product'
-                                  ? data.library.products.find(product => product.id === item.refId)?.name
-                                  : item.title}
-                              </div>
-                              <div className="text-xs text-slate-500">
-                                {item.plannedTime ? `Время: ${item.plannedTime}` : ''}
-                                {item.plannedGrams ? ` · ${item.plannedGrams} г` : ''}
-                                {item.plannedServings ? ` · ${item.plannedServings} порц.` : ''}
-                                {item.plannedKcal ? ` · ${item.plannedKcal} ккал` : ''}
-                              </div>
-                              {item.notes ? (
-                                <div className="text-xs text-slate-400">{item.notes}</div>
-                              ) : null}
-                              <button
-                                className="btn-secondary w-full text-red-500 sm:w-auto"
-                                onClick={() =>
-                                  updateData(state => {
-                                    const plan = state.planner.dayPlans.find(
-                                      itemPlan => itemPlan.date === editorDate
-                                    );
-                                    if (!plan) return { ...state };
-                                    plan.mealsPlan[meal] = plan.mealsPlan[meal].filter(
-                                      itemPlan => itemPlan.id !== item.id
-                                    );
-                                    return { ...state };
-                                  })
-                                }
+                          dayPlan.mealsPlan[meal].map(item => {
+                            const product =
+                              item.kind === 'product'
+                                ? data.library.products.find(product => product.id === item.refId)
+                                : undefined;
+                            const recipe =
+                              item.kind === 'dish'
+                                ? data.library.recipes.find(recipe => recipe.id === item.refId)
+                                : undefined;
+                            const pieceLabel = product?.pieceLabel ?? 'шт.';
+                            const infoParts = [
+                              item.plannedTime ? `Время: ${item.plannedTime}` : '',
+                              item.plannedGrams ? `${item.plannedGrams} г` : '',
+                              item.plannedPieces ? `${item.plannedPieces} ${pieceLabel}` : '',
+                              item.plannedPortionLabel
+                                ? item.plannedPortionLabel
+                                : item.plannedServings
+                                ? `${item.plannedServings} порц.`
+                                : '',
+                              item.plannedKcal ? `${item.plannedKcal} ккал` : ''
+                            ].filter(Boolean);
+                            return (
+                              <div
+                                key={item.id}
+                                className="flex flex-col gap-2 rounded-lg border border-slate-200 p-2 text-sm"
                               >
-                                Удалить
-                              </button>
-                            </div>
-                          ))
+                                <div>
+                                  {item.kind === 'dish'
+                                    ? recipe?.name
+                                    : item.kind === 'product'
+                                    ? product?.name
+                                    : item.title}
+                                </div>
+                                <div className="text-xs text-slate-500">
+                                  {infoParts.length > 0 ? infoParts.join(' · ') : '—'}
+                                </div>
+                                {item.notes ? (
+                                  <div className="text-xs text-slate-400">{item.notes}</div>
+                                ) : null}
+                                <button
+                                  className="btn-secondary w-full text-red-500 sm:w-auto"
+                                  onClick={() =>
+                                    updateData(state => {
+                                      const plan = state.planner.dayPlans.find(
+                                        itemPlan => itemPlan.date === editorDate
+                                      );
+                                      if (!plan) return { ...state };
+                                      plan.mealsPlan[meal] = plan.mealsPlan[meal].filter(
+                                        itemPlan => itemPlan.id !== item.id
+                                      );
+                                      return { ...state };
+                                    })
+                                  }
+                                >
+                                  Удалить
+                                </button>
+                              </div>
+                            );
+                          })
                         )}
                       </div>
                       <div className="mt-3 space-y-2">
@@ -2291,22 +2338,37 @@ const PlanPage = () => {
                             </div>
                             <ul className="mt-1 space-y-1">
                               {plan.mealsPlan[meal].length ? (
-                                plan.mealsPlan[meal].map(item => (
-                                  <li key={item.id}>
-                                    •{' '}
-                                    {item.kind === 'dish'
-                                      ? data.library.recipes.find(
-                                          recipe => recipe.id === item.refId
-                                        )?.name
-                                      : item.kind === 'product'
+                                plan.mealsPlan[meal].map(item => {
+                                  const product =
+                                    item.kind === 'product'
                                       ? data.library.products.find(
                                           product => product.id === item.refId
-                                        )?.name
-                                      : item.title}
-                                    {item.plannedGrams ? ` (${item.plannedGrams} г)` : ''}
-                                    {item.plannedServings ? ` (${item.plannedServings} порц.)` : ''}
-                                  </li>
-                                ))
+                                        )
+                                      : undefined;
+                                  const recipe =
+                                    item.kind === 'dish'
+                                      ? data.library.recipes.find(
+                                          recipe => recipe.id === item.refId
+                                        )
+                                      : undefined;
+                                  const pieceLabel = product?.pieceLabel ?? 'шт.';
+                                  return (
+                                    <li key={item.id}>
+                                      •{' '}
+                                      {item.kind === 'dish'
+                                        ? recipe?.name
+                                        : item.kind === 'product'
+                                        ? product?.name
+                                        : item.title}
+                                      {item.plannedGrams ? ` (${item.plannedGrams} г)` : ''}
+                                      {item.plannedPieces ? ` (${item.plannedPieces} ${pieceLabel})` : ''}
+                                      {item.plannedPortionLabel ? ` (${item.plannedPortionLabel})` : ''}
+                                      {!item.plannedPortionLabel && item.plannedServings
+                                        ? ` (${item.plannedServings} порц.)`
+                                        : ''}
+                                    </li>
+                                  );
+                                })
                               ) : (
                                 <li className="text-slate-400">Нет записей</li>
                               )}
@@ -2461,11 +2523,21 @@ const PlanPage = () => {
                     setMealSheet(prev => {
                       if (!prev) return prev;
                       const refId = event.target.value;
+                      const recipe = data.library.recipes.find(item => item.id === refId);
+                      const product = data.library.products.find(item => item.id === refId);
                       const tags =
                         prev.kind === 'dish'
-                          ? data.library.recipes.find(item => item.id === refId)?.nutritionTags ?? []
-                          : data.library.products.find(item => item.id === refId)?.nutritionTags ?? [];
-                      return { ...prev, refId, nutritionTags: tags };
+                          ? recipe?.nutritionTags ?? []
+                          : product?.nutritionTags ?? [];
+                      const supportsPieces = Boolean(product?.pieceGrams);
+                      return {
+                        ...prev,
+                        refId,
+                        nutritionTags: tags,
+                        portionMode: prev.kind === 'product' && supportsPieces ? 'pieces' : 'grams',
+                        pieces:
+                          prev.kind === 'product' && supportsPieces ? prev.pieces || 1 : prev.pieces
+                      };
                     })
                   }
                 >
@@ -2482,29 +2554,108 @@ const PlanPage = () => {
             )}
 
             {mealSheet.kind === 'dish' ? (
-              <input
-                className="input"
-                type="number"
-                placeholder="Порции"
-                value={mealSheet.servings}
-                onChange={event =>
-                  setMealSheet(prev =>
-                    prev ? { ...prev, servings: Number(event.target.value) } : prev
-                  )
-                }
-              />
+              <>
+                <label className="text-sm font-semibold text-slate-600">Порции (для расчётов)</label>
+                <input
+                  className="input"
+                  type="number"
+                  value={mealSheet.servings}
+                  onChange={event =>
+                    setMealSheet(prev =>
+                      prev ? { ...prev, servings: Number(event.target.value) } : prev
+                    )
+                  }
+                />
+                <label className="text-sm font-semibold text-slate-600">Описание порции</label>
+                <input
+                  className="input"
+                  placeholder="Например: 1 тарелка"
+                  value={mealSheet.portionLabel}
+                  onChange={event =>
+                    setMealSheet(prev =>
+                      prev ? { ...prev, portionLabel: event.target.value } : prev
+                    )
+                  }
+                />
+                <div className="control-row">
+                  {data.presets.dishPortions.map(preset => (
+                    <button
+                      key={preset.label}
+                      className="btn-secondary"
+                      onClick={() =>
+                        setMealSheet(prev =>
+                          prev
+                            ? { ...prev, servings: preset.servings, portionLabel: preset.label }
+                            : prev
+                        )
+                      }
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </>
             ) : null}
 
             {mealSheet.kind === 'product' ? (
-              <input
-                className="input"
-                type="number"
-                placeholder="Граммы"
-                value={mealSheet.grams}
-                onChange={event =>
-                  setMealSheet(prev => prev ? { ...prev, grams: Number(event.target.value) } : prev)
-                }
-              />
+              <>
+                {mealSheetSupportsPieces ? (
+                  <div className="flex gap-2">
+                    <button
+                      className={
+                        mealSheet.portionMode === 'pieces' ? 'btn-primary' : 'btn-secondary'
+                      }
+                      onClick={() =>
+                        setMealSheet(prev =>
+                          prev ? { ...prev, portionMode: 'pieces' } : prev
+                        )
+                      }
+                    >
+                      Штуки
+                    </button>
+                    <button
+                      className={mealSheet.portionMode === 'grams' ? 'btn-primary' : 'btn-secondary'}
+                      onClick={() =>
+                        setMealSheet(prev => (prev ? { ...prev, portionMode: 'grams' } : prev))
+                      }
+                    >
+                      Граммы
+                    </button>
+                  </div>
+                ) : null}
+                {(!mealSheetSupportsPieces || mealSheet.portionMode === 'grams') && (
+                  <>
+                    <label className="text-sm font-semibold text-slate-600">Граммы</label>
+                    <input
+                      className="input"
+                      type="number"
+                      value={mealSheet.grams}
+                      onChange={event =>
+                        setMealSheet(prev =>
+                          prev ? { ...prev, grams: Number(event.target.value) } : prev
+                        )
+                      }
+                    />
+                  </>
+                )}
+                {mealSheetSupportsPieces && mealSheet.portionMode === 'pieces' && (
+                  <>
+                    <label className="text-sm font-semibold text-slate-600">
+                      Количество ({mealSheetPieceLabel})
+                    </label>
+                    <input
+                      className="input"
+                      type="number"
+                      value={mealSheet.pieces}
+                      onChange={event =>
+                        setMealSheet(prev =>
+                          prev ? { ...prev, pieces: Number(event.target.value) } : prev
+                        )
+                      }
+                    />
+                  </>
+                )}
+              </>
             ) : null}
 
             {(mealSheet.kind === 'free' || mealSheet.kind === 'cheat') && (

@@ -10,6 +10,17 @@ const macroForProduct = (product: Product, grams: number) => {
   };
 };
 
+export const resolveProductGrams = (
+  product: Product | undefined,
+  grams?: number,
+  pieces?: number
+) => {
+  if (!product) return 0;
+  if (grams) return grams;
+  if (pieces && product.pieceGrams) return pieces * product.pieceGrams;
+  return 0;
+};
+
 export const calcRecipeNutrition = (recipe: Recipe, library: LibraryState) => {
   const totals = recipe.ingredients.reduce(
     (acc, ingredient) => {
@@ -55,6 +66,12 @@ export const calcFoodEntry = (entry: FoodEntry, library: LibraryState) => {
     if (!product) return { kcal: 0, protein: 0, fat: 0, carb: 0 };
     return macroForProduct(product, entry.grams);
   }
+  if (entry.kind === 'product' && entry.refId && entry.pieces) {
+    const product = library.products.find(item => item.id === entry.refId);
+    if (!product) return { kcal: 0, protein: 0, fat: 0, carb: 0 };
+    const grams = resolveProductGrams(product, entry.grams, entry.pieces);
+    return macroForProduct(product, grams);
+  }
   if (entry.kind === 'dish' && entry.refId) {
     const recipe = library.recipes.find(item => item.id === entry.refId);
     if (!recipe) return { kcal: 0, protein: 0, fat: 0, carb: 0 };
@@ -88,6 +105,12 @@ export const calcMealPlanItem = (item: MealPlanItem, library: LibraryState) => {
     const product = library.products.find(prod => prod.id === item.refId);
     if (!product) return { kcal: 0, protein: 0, fat: 0, carb: 0 };
     return macroForProduct(product, item.plannedGrams);
+  }
+  if (item.kind === 'product' && item.refId && item.plannedPieces) {
+    const product = library.products.find(prod => prod.id === item.refId);
+    if (!product) return { kcal: 0, protein: 0, fat: 0, carb: 0 };
+    const grams = resolveProductGrams(product, item.plannedGrams, item.plannedPieces);
+    return macroForProduct(product, grams);
   }
   if (item.kind === 'dish' && item.refId) {
     const recipe = library.recipes.find(rec => rec.id === item.refId);

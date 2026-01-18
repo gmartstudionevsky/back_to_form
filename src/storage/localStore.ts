@@ -305,6 +305,16 @@ export const loadData = (): AppData => {
           carbPer100ml: drink.carbPer100ml ?? 0
         }));
       }
+      if (!parsed.schemaVersion || parsed.schemaVersion < 12) {
+        migrated.library.products = (migrated.library.products ?? parsed.library?.products ?? []).map(product => ({
+          ...product,
+          pieceLabel: product.pieceLabel ?? (product.pieceGrams ? 'шт.' : undefined)
+        }));
+        migrated.presets = {
+          portions: parsed.presets?.portions ?? seedData.presets.portions,
+          dishPortions: parsed.presets?.dishPortions ?? seedData.presets.dishPortions
+        };
+      }
       return migrated;
     }
     return parsed;
