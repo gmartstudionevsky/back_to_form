@@ -1,8 +1,16 @@
 import { AppData, MovementActivity } from '../types';
 import { seedData, schemaVersion } from '../data/seed';
+import { logger } from '../utils/logger';
 
 const STORAGE_KEY = 'btf-data';
 
+const buildLoadMeta = (payload?: string, version?: number) => ({
+  storageKey: STORAGE_KEY,
+  payloadBytes: payload ? payload.length : 0,
+  schemaVersion: version ?? schemaVersion
+});
+
+// LocalStorage can fail in private mode or quota pressure, so keep writes resilient.
 const safeSetItem = (key: string, value: string) => {
   try {
     localStorage.setItem(key, value);
@@ -22,9 +30,14 @@ const safeRemoveItem = (key: string) => {
 export const loadData = (): AppData => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return seedData;
+    if (!raw) {
+      logger.info('Storage: no cached data, using seed', buildLoadMeta());
+      return seedData;
+    }
     const parsed = JSON.parse(raw) as AppData;
+    // When schema changes, we keep user data and progressively fill new fields.
     if (!parsed.schemaVersion || parsed.schemaVersion !== schemaVersion) {
+      logger.info('Storage: schema mismatch, migrating data', buildLoadMeta(raw, parsed.schemaVersion));
       const migrated: AppData = { ...seedData, ...parsed, schemaVersion };
       if (!parsed.schemaVersion || parsed.schemaVersion < 2) {
         migrated.logs.foodDays = (parsed.logs?.foodDays ?? []).map(day => ({
@@ -317,8 +330,10 @@ export const loadData = (): AppData => {
       }
       return migrated;
     }
+    logger.info('Storage: loaded cached data', buildLoadMeta(raw, parsed.schemaVersion));
     return parsed;
   } catch {
+    logger.warn('Storage: failed to parse cached data, resetting', buildLoadMeta());
     safeRemoveItem(STORAGE_KEY);
     safeSetItem(STORAGE_KEY, JSON.stringify(seedData));
     return seedData;
@@ -327,8 +342,10 @@ export const loadData = (): AppData => {
 
 export const saveData = (data: AppData) => {
   safeSetItem(STORAGE_KEY, JSON.stringify(data));
+  logger.info('Storage: data saved', buildLoadMeta(undefined, data.schemaVersion));
 };
 
 export const resetData = () => {
   safeSetItem(STORAGE_KEY, JSON.stringify(seedData));
+  logger.info('Storage: data reset to seed', buildLoadMeta());
 };
