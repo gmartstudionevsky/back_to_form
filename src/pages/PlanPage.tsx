@@ -3,7 +3,12 @@ import { BottomSheet } from '../components/BottomSheet';
 import { useAppStore } from '../store/useAppStore';
 import { FoodEntry, MealPlanItem, Period, WorkoutPlanItem } from '../types';
 import { calcRecipeNutrition } from '../utils/nutrition';
-import { timeOfDayLabels } from '../utils/timeOfDay';
+import {
+  getDefaultMealTime,
+  getDefaultTimeForTimeOfDay,
+  getTimeOfDayFromTime,
+  timeOfDayLabels
+} from '../utils/timeOfDay';
 
 const tabs = ['Периоды', 'Рацион'] as const;
 
@@ -23,6 +28,7 @@ type WorkoutDraft = {
   timeOfDay: WorkoutPlanItem['timeOfDay'];
   kind: WorkoutPlanItem['kind'];
   protocolRef: string;
+  plannedTime: string;
   plannedMinutes: number;
   isRequired: boolean;
   movementActivityRef: string;
@@ -92,6 +98,12 @@ const PlanPage = () => {
   const dayPlan = editorDate
     ? data.planner.dayPlans.find(plan => plan.date === editorDate)
     : undefined;
+  const mealTimes = dayPlan?.mealTimes ?? {
+    breakfast: '',
+    lunch: '',
+    dinner: '',
+    snack: ''
+  };
 
   const plannedKcal = (planDate: string) => {
     const plan = data.planner.dayPlans.find(item => item.date === planDate);
@@ -140,9 +152,14 @@ const PlanPage = () => {
     updateData(state => {
       const plan = state.planner.dayPlans.find(item => item.date === editorDate);
       if (!plan) return { ...state };
+      const plannedTime = workoutSheet.plannedTime?.trim() || undefined;
+      const timeOfDay = plannedTime
+        ? getTimeOfDayFromTime(plannedTime)
+        : workoutSheet.timeOfDay;
       plan.workoutsPlan.push({
         id: crypto.randomUUID(),
-        timeOfDay: workoutSheet.timeOfDay,
+        timeOfDay,
+        plannedTime,
         kind: workoutSheet.kind,
         protocolRef: workoutSheet.protocolRef || undefined,
         plannedMinutes: workoutSheet.kind === 'movement' ? workoutSheet.plannedMinutes : undefined,
@@ -157,6 +174,46 @@ const PlanPage = () => {
       return { ...state };
     });
     setWorkoutSheet(null);
+  };
+
+  const updateMealTime = (meal: FoodEntry['meal'], time: string) => {
+    if (!editorDate) return;
+    updateData(state => {
+      const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+      if (!plan) return { ...state };
+      plan.mealTimes ??= { breakfast: '', lunch: '', dinner: '', snack: '' };
+      plan.mealTimes[meal] = time;
+      return { ...state };
+    });
+  };
+
+  const updateWorkoutTime = (id: string, time: string) => {
+    if (!editorDate) return;
+    updateData(state => {
+      const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+      if (!plan) return { ...state };
+      plan.workoutsPlan = plan.workoutsPlan.map(item => {
+        if (item.id !== id) return item;
+        return {
+          ...item,
+          plannedTime: time || undefined,
+          timeOfDay: time ? getTimeOfDayFromTime(time) : item.timeOfDay
+        };
+      });
+      return { ...state };
+    });
+  };
+
+  const updateWorkoutTimeOfDay = (id: string, timeOfDay: WorkoutPlanItem['timeOfDay']) => {
+    if (!editorDate) return;
+    updateData(state => {
+      const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+      if (!plan) return { ...state };
+      plan.workoutsPlan = plan.workoutsPlan.map(item =>
+        item.id === id ? { ...item, timeOfDay } : item
+      );
+      return { ...state };
+    });
   };
 
   const copyMenuRange = () => {
@@ -405,7 +462,20 @@ const PlanPage = () => {
                 </div>
                 {(Object.keys(mealLabels) as FoodEntry['meal'][]).map(meal => (
                   <div key={meal} className="space-y-2">
-                    <p className="text-xs uppercase tracking-wide text-slate-400">{mealLabels[meal]}</p>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs uppercase tracking-wide text-slate-400">
+                        {mealLabels[meal]}
+                      </p>
+                      <label className="text-[11px] text-slate-500">
+                        Время
+                        <input
+                          type="time"
+                          className="input input-time mt-1 w-32"
+                          value={mealTimes[meal] || getDefaultMealTime(meal)}
+                          onChange={event => updateMealTime(meal, event.target.value)}
+                        />
+                      </label>
+                    </div>
                     {dayPlan.mealsPlan[meal].length === 0 ? (
                       <p className="text-xs text-slate-500">Нет позиций</p>
                     ) : (
@@ -455,6 +525,7 @@ const PlanPage = () => {
                         timeOfDay: 'morning',
                         kind: 'workout',
                         protocolRef: '',
+                        plannedTime: '',
                         plannedMinutes: 10,
                         isRequired: true,
                         movementActivityRef: data.library.movementActivities[0]?.id ?? ''
@@ -496,6 +567,38 @@ const PlanPage = () => {
                               )?.name ?? 'Активность'
                             } · ${item.plannedMinutes ?? 10} мин`
                           : data.library.protocols.find(proto => proto.id === item.protocolRef)?.name}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                        <label>
+                          Время
+                          <input
+                            type="time"
+                            className="input input-time mt-1 w-32"
+                            value={item.plannedTime ?? getDefaultTimeForTimeOfDay(item.timeOfDay)}
+                            onChange={event => updateWorkoutTime(item.id, event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          Время суток
+                          <select
+                            className="input input-time mt-1"
+                            value={item.timeOfDay}
+                            onChange={event =>
+                              updateWorkoutTimeOfDay(
+                                item.id,
+                                event.target.value as WorkoutPlanItem['timeOfDay']
+                              )
+                            }
+                          >
+                            {(Object.keys(timeOfDayLabels) as WorkoutPlanItem['timeOfDay'][]).map(
+                              option => (
+                                <option key={option} value={option}>
+                                  {timeOfDayLabels[option]}
+                                </option>
+                              )
+                            )}
+                          </select>
+                        </label>
                       </div>
                       <button
                         className="btn-secondary w-full text-red-500 sm:w-auto"
@@ -725,7 +828,7 @@ const PlanPage = () => {
       >
         {workoutSheet && (
           <div className="space-y-3">
-            <label className="text-sm font-semibold text-slate-600">Время</label>
+            <label className="text-sm font-semibold text-slate-600">Время суток</label>
             <select
               className="input"
               value={workoutSheet.timeOfDay}
@@ -743,6 +846,25 @@ const PlanPage = () => {
                 </option>
               ))}
             </select>
+            <label className="text-sm font-semibold text-slate-600">Точное время</label>
+            <input
+              type="time"
+              className="input"
+              value={workoutSheet.plannedTime}
+              onChange={event =>
+                setWorkoutSheet(prev =>
+                  prev
+                    ? {
+                        ...prev,
+                        plannedTime: event.target.value,
+                        timeOfDay: event.target.value
+                          ? getTimeOfDayFromTime(event.target.value)
+                          : prev.timeOfDay
+                      }
+                    : prev
+                )
+              }
+            />
             <label className="text-sm font-semibold text-slate-600">Тип</label>
             <select
               className="input"

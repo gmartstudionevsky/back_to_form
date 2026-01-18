@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { BottomSheet } from '../components/BottomSheet';
 import { useAppStore } from '../store/useAppStore';
 import { calcFoodEntry, calcRecipeNutrition } from '../utils/nutrition';
-import { todayISO } from '../utils/date';
+import { combineDateTime, currentTimeString, todayISO } from '../utils/date';
 import { getTimeOfDayFromDateTime, timeOfDayLabels } from '../utils/timeOfDay';
 import {
   ActivityLog,
@@ -128,10 +128,7 @@ const TrackPage = () => {
   const waistLogs = data.logs.waist.filter(log => log.date === selectedDate);
   const sleepLogs = data.logs.sleep.filter(log => log.date === selectedDate);
 
-  const toDateTime = (date: string, time: string) => {
-    if (!time) return new Date().toISOString();
-    return new Date(`${date}T${time}:00`).toISOString();
-  };
+  const toDateTime = (date: string, time?: string) => combineDateTime(date, time);
 
   const movementDay = data.logs.movementDays.find(day => day.date === selectedDate);
   const movementSessions = data.logs.movementSessions.filter(
@@ -153,7 +150,7 @@ const TrackPage = () => {
       refId: '',
       grams: 120,
       servings: 1,
-      time: '',
+      time: currentTimeString(),
       title: '',
       kcalOverrideText: '',
       cheatCategory: 'pizza'
@@ -190,7 +187,7 @@ const TrackPage = () => {
     setTrainingDraft(
       log ?? {
         id: '',
-        dateTime: toDateTime(selectedDate, ''),
+        dateTime: toDateTime(selectedDate),
         type: 'workout',
         minutes: 45,
         timeOfDay: getTimeOfDayFromDateTime(new Date().toISOString())
@@ -217,7 +214,7 @@ const TrackPage = () => {
     setMovementDraft(
       log ?? {
         id: '',
-        dateTime: toDateTime(selectedDate, ''),
+        dateTime: toDateTime(selectedDate),
         activityRef,
         durationMinutes: 20,
         plannedFlights: 10,
@@ -244,7 +241,7 @@ const TrackPage = () => {
     setSmokingDraft(
       log ?? {
         id: '',
-        dateTime: toDateTime(selectedDate, ''),
+        dateTime: toDateTime(selectedDate),
         count: 1,
         trigger: 'стресс',
         stressLevel1to5: 3,
@@ -268,7 +265,7 @@ const TrackPage = () => {
     setWeightDraft(
       log ?? {
         id: '',
-        dateTime: toDateTime(selectedDate, ''),
+        dateTime: toDateTime(selectedDate),
         weightKg: 72
       }
     );

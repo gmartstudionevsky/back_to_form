@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BottomSheet } from '../components/BottomSheet';
 import { useAppStore } from '../store/useAppStore';
-import { todayISO } from '../utils/date';
+import { currentTimeString, todayISO } from '../utils/date';
 import { calcRecipeNutrition } from '../utils/nutrition';
 import { savePhotoBlob } from '../storage/photoDb';
 import { Exercise, FoodEntry, Recipe, TaskTemplate, MovementActivity } from '../types';
@@ -49,7 +49,7 @@ const LibraryPage = () => {
     meal: 'breakfast' as FoodEntry['meal'],
     grams: 120,
     servings: 1,
-    time: '',
+    time: currentTimeString(),
     date: todayISO()
   });
   const [newDish, setNewDish] = useState({
@@ -109,7 +109,13 @@ const LibraryPage = () => {
   }, [active, data.library, query]);
 
   const openFoodSheet = (item: FoodSheetItem) => {
-    setFoodForm({ meal: 'breakfast', grams: 120, servings: 1, time: '', date: todayISO() });
+    setFoodForm({
+      meal: 'breakfast',
+      grams: 120,
+      servings: 1,
+      time: currentTimeString(),
+      date: todayISO()
+    });
     setFoodSheet(item);
   };
 
