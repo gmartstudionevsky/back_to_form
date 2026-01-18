@@ -658,6 +658,96 @@ const PlanPage = () => {
 
               <div className="space-y-2">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <h3 className="text-sm font-semibold">Активность</h3>
+                  <p className="text-xs text-slate-500">
+                    Планируйте общий коэффициент и ключевые показатели.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <input
+                    className="input"
+                    type="number"
+                    step="0.01"
+                    placeholder="Коэффициент активности"
+                    value={dayPlan.activityTargets?.coefficient ?? ''}
+                    onChange={event =>
+                      updateData(state => {
+                        const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+                        if (!plan) return { ...state };
+                        plan.activityTargets ??= {};
+                        plan.activityTargets.coefficient = Number(event.target.value) || undefined;
+                        return { ...state };
+                      })
+                    }
+                  />
+                  <input
+                    className="input"
+                    type="number"
+                    placeholder="Минуты тренировок"
+                    value={dayPlan.activityTargets?.trainingMinutes ?? ''}
+                    onChange={event =>
+                      updateData(state => {
+                        const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+                        if (!plan) return { ...state };
+                        plan.activityTargets ??= {};
+                        plan.activityTargets.trainingMinutes = Number(event.target.value) || undefined;
+                        return { ...state };
+                      })
+                    }
+                  />
+                  <input
+                    className="input"
+                    type="number"
+                    placeholder="Минуты движения"
+                    value={dayPlan.activityTargets?.movementMinutes ?? ''}
+                    onChange={event =>
+                      updateData(state => {
+                        const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+                        if (!plan) return { ...state };
+                        plan.activityTargets ??= {};
+                        plan.activityTargets.movementMinutes = Number(event.target.value) || undefined;
+                        return { ...state };
+                      })
+                    }
+                  />
+                  <input
+                    className="input"
+                    type="number"
+                    placeholder="Шаги по плану"
+                    value={dayPlan.activityTargets?.steps ?? dayPlan.plannedSteps ?? ''}
+                    onChange={event =>
+                      updateData(state => {
+                        const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+                        if (!plan) return { ...state };
+                        const stepsValue = Number(event.target.value) || undefined;
+                        plan.plannedSteps = stepsValue;
+                        plan.activityTargets ??= {};
+                        plan.activityTargets.steps = stepsValue;
+                        return { ...state };
+                      })
+                    }
+                  />
+                  <input
+                    className="input"
+                    type="number"
+                    step="0.1"
+                    placeholder="Дистанция, км"
+                    value={dayPlan.activityTargets?.distanceKm ?? ''}
+                    onChange={event =>
+                      updateData(state => {
+                        const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+                        if (!plan) return { ...state };
+                        plan.activityTargets ??= {};
+                        plan.activityTargets.distanceKm = Number(event.target.value) || undefined;
+                        return { ...state };
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <h3 className="text-sm font-semibold">Тренировки</h3>
                   <button
                     className="btn-secondary w-full sm:w-auto"
@@ -675,22 +765,6 @@ const PlanPage = () => {
                   >
                     Добавить сессию
                   </button>
-                </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <input
-                    className="input"
-                    type="number"
-                    placeholder="Шаги по плану"
-                    value={dayPlan.plannedSteps ?? ''}
-                    onChange={event =>
-                      updateData(state => {
-                        const plan = state.planner.dayPlans.find(item => item.date === editorDate);
-                        if (!plan) return { ...state };
-                        plan.plannedSteps = Number(event.target.value) || undefined;
-                        return { ...state };
-                      })
-                    }
-                  />
                 </div>
                 {dayPlan.workoutsPlan.length === 0 ? (
                   <p className="text-xs text-slate-500">Нет тренировок</p>

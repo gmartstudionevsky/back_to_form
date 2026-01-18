@@ -9,6 +9,7 @@ export type Exercise = {
   mistakes: string[];
   regressions: string[];
   progressions: string[];
+  activityMetrics?: ActivityMetrics;
   media?: {
     youtubeUrl?: string;
     localVideoBlobKey?: string;
@@ -26,6 +27,29 @@ export type Protocol = {
   name: string;
   description: string;
   steps: ProtocolStep[];
+};
+
+export type ActivityMetrics = {
+  perMinute?: number;
+  perRep?: number;
+  perSet?: number;
+  perKm?: number;
+  perStep?: number;
+  perFlight?: number;
+  perKcal?: number;
+  base?: number;
+};
+
+export type ActivityDefaults = {
+  workoutPerMinute: number;
+  movementPerMinute: number;
+  step: number;
+  distanceKm: number;
+  set: number;
+  rep: number;
+  kcal: number;
+  flight: number;
+  exerciseBase: number;
 };
 
 export type PortionPreset = { label: string; grams: number };
@@ -116,6 +140,14 @@ export type DayPlan = {
     snack: MealPlanItem[];
   };
   plannedSteps?: number;
+  activityTargets?: {
+    coefficient?: number;
+    trainingMinutes?: number;
+    movementMinutes?: number;
+    steps?: number;
+    distanceKm?: number;
+    kcal?: number;
+  };
   mealComponents?: {
     breakfast: MealComponent[];
     lunch: MealComponent[];
@@ -220,6 +252,10 @@ export type ActivityLog = {
   type: 'workout';
   minutes: number;
   blocks?: number;
+  sets?: number;
+  reps?: number;
+  calories?: number;
+  protocolRef?: UUID;
   timeOfDay?: TimeOfDay;
 };
 
@@ -227,6 +263,7 @@ export type MovementActivity = {
   id: UUID;
   name: string;
   kind: 'run' | 'march' | 'stairs';
+  activityMetrics?: ActivityMetrics;
 };
 
 export type GeoPoint = {
@@ -240,6 +277,8 @@ export type MovementSessionLog = {
   activityRef: UUID;
   durationMinutes: number;
   distanceKm?: number;
+  steps?: number;
+  calories?: number;
   startLocation?: GeoPoint;
   endLocation?: GeoPoint;
   plannedFlights?: number;
@@ -326,6 +365,7 @@ export type LibraryState = {
   rules: Rule[];
   movementActivities: MovementActivity[];
   taskTemplates: TaskTemplate[];
+  activityDefaults: ActivityDefaults;
 };
 
 export type PlannerState = {

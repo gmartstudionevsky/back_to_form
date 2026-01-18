@@ -262,6 +262,9 @@ const TrackPage = () => {
         dateTime: toDateTime(selectedDate),
         type: 'workout',
         minutes: 45,
+        sets: 0,
+        reps: 0,
+        calories: 0,
         timeOfDay: getTimeOfDayFromDateTime(new Date().toISOString())
       }
     );
@@ -271,6 +274,9 @@ const TrackPage = () => {
     if (!trainingDraft) return;
     const payload = {
       ...trainingDraft,
+      sets: trainingDraft.sets || undefined,
+      reps: trainingDraft.reps || undefined,
+      calories: trainingDraft.calories || undefined,
       timeOfDay: getTimeOfDayFromDateTime(trainingDraft.dateTime)
     };
     if (trainingDraft.id) {
@@ -289,6 +295,8 @@ const TrackPage = () => {
         dateTime: toDateTime(selectedDate),
         activityRef,
         durationMinutes: 20,
+        steps: 0,
+        calories: 0,
         plannedFlights: 10,
         timeOfDay: getTimeOfDayFromDateTime(new Date().toISOString())
       }
@@ -299,6 +307,8 @@ const TrackPage = () => {
     if (!movementDraft) return;
     const payload = {
       ...movementDraft,
+      steps: movementDraft.steps || undefined,
+      calories: movementDraft.calories || undefined,
       timeOfDay: getTimeOfDayFromDateTime(movementDraft.dateTime)
     };
     if (movementDraft.id) {
@@ -1128,6 +1138,39 @@ const TrackPage = () => {
                 )
               }
             />
+            <label className="text-sm font-semibold text-slate-600">Подходы</label>
+            <input
+              type="number"
+              className="input"
+              value={trainingDraft.sets ?? 0}
+              onChange={event =>
+                setTrainingDraft(prev =>
+                  prev ? { ...prev, sets: Number(event.target.value) } : prev
+                )
+              }
+            />
+            <label className="text-sm font-semibold text-slate-600">Повторы</label>
+            <input
+              type="number"
+              className="input"
+              value={trainingDraft.reps ?? 0}
+              onChange={event =>
+                setTrainingDraft(prev =>
+                  prev ? { ...prev, reps: Number(event.target.value) } : prev
+                )
+              }
+            />
+            <label className="text-sm font-semibold text-slate-600">Калории</label>
+            <input
+              type="number"
+              className="input"
+              value={trainingDraft.calories ?? 0}
+              onChange={event =>
+                setTrainingDraft(prev =>
+                  prev ? { ...prev, calories: Number(event.target.value) } : prev
+                )
+              }
+            />
             <label className="text-sm font-semibold text-slate-600">Дата и время</label>
             <input
               type="datetime-local"
@@ -1180,6 +1223,28 @@ const TrackPage = () => {
               onChange={event =>
                 setMovementDraft(prev =>
                   prev ? { ...prev, durationMinutes: Number(event.target.value) } : prev
+                )
+              }
+            />
+            <label className="text-sm font-semibold text-slate-600">Шаги</label>
+            <input
+              type="number"
+              className="input"
+              value={movementDraft.steps ?? 0}
+              onChange={event =>
+                setMovementDraft(prev =>
+                  prev ? { ...prev, steps: Number(event.target.value) } : prev
+                )
+              }
+            />
+            <label className="text-sm font-semibold text-slate-600">Калории</label>
+            <input
+              type="number"
+              className="input"
+              value={movementDraft.calories ?? 0}
+              onChange={event =>
+                setMovementDraft(prev =>
+                  prev ? { ...prev, calories: Number(event.target.value) } : prev
                 )
               }
             />

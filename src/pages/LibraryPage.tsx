@@ -75,11 +75,17 @@ const LibraryPage = () => {
   const [newExercise, setNewExercise] = useState({
     name: '',
     tags: '',
-    steps: ''
+    steps: '',
+    activityPerMinute: 0.04,
+    activityBase: 0.2
   });
   const [newMovementActivity, setNewMovementActivity] = useState({
     name: '',
-    kind: 'march' as MovementActivity['kind']
+    kind: 'march' as MovementActivity['kind'],
+    perMinute: 0.03,
+    perKm: 0.3,
+    perStep: 0.00008,
+    perFlight: 0.05
   });
   const [taskDate, setTaskDate] = useState(todayISO());
 
@@ -790,6 +796,34 @@ const LibraryPage = () => {
               value={newExercise.steps}
               onChange={event => setNewExercise(prev => ({ ...prev, steps: event.target.value }))}
             />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <input
+                className="input"
+                type="number"
+                step="0.01"
+                placeholder="Коэф. за минуту"
+                value={newExercise.activityPerMinute}
+                onChange={event =>
+                  setNewExercise(prev => ({
+                    ...prev,
+                    activityPerMinute: Number(event.target.value)
+                  }))
+                }
+              />
+              <input
+                className="input"
+                type="number"
+                step="0.01"
+                placeholder="Базовый коэф."
+                value={newExercise.activityBase}
+                onChange={event =>
+                  setNewExercise(prev => ({
+                    ...prev,
+                    activityBase: Number(event.target.value)
+                  }))
+                }
+              />
+            </div>
             <button
               className="btn-primary w-full"
               onClick={() => {
@@ -809,11 +843,21 @@ const LibraryPage = () => {
                     cues: [],
                     mistakes: [],
                     regressions: [],
-                    progressions: []
+                    progressions: [],
+                    activityMetrics: {
+                      perMinute: newExercise.activityPerMinute,
+                      base: newExercise.activityBase
+                    }
                   });
                   return { ...state };
                 });
-                setNewExercise({ name: '', tags: '', steps: '' });
+                setNewExercise({
+                  name: '',
+                  tags: '',
+                  steps: '',
+                  activityPerMinute: 0.04,
+                  activityBase: 0.2
+                });
                 setCreateSheet(null);
               }}
             >
@@ -847,6 +891,60 @@ const LibraryPage = () => {
               <option value="march">Ходьба на месте</option>
               <option value="stairs">Ходьба по лестницам</option>
             </select>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <input
+                className="input"
+                type="number"
+                step="0.01"
+                placeholder="Коэф. за минуту"
+                value={newMovementActivity.perMinute}
+                onChange={event =>
+                  setNewMovementActivity(prev => ({
+                    ...prev,
+                    perMinute: Number(event.target.value)
+                  }))
+                }
+              />
+              <input
+                className="input"
+                type="number"
+                step="0.01"
+                placeholder="Коэф. за км"
+                value={newMovementActivity.perKm}
+                onChange={event =>
+                  setNewMovementActivity(prev => ({
+                    ...prev,
+                    perKm: Number(event.target.value)
+                  }))
+                }
+              />
+              <input
+                className="input"
+                type="number"
+                step="0.00001"
+                placeholder="Коэф. за шаг"
+                value={newMovementActivity.perStep}
+                onChange={event =>
+                  setNewMovementActivity(prev => ({
+                    ...prev,
+                    perStep: Number(event.target.value)
+                  }))
+                }
+              />
+              <input
+                className="input"
+                type="number"
+                step="0.01"
+                placeholder="Коэф. за пролет"
+                value={newMovementActivity.perFlight}
+                onChange={event =>
+                  setNewMovementActivity(prev => ({
+                    ...prev,
+                    perFlight: Number(event.target.value)
+                  }))
+                }
+              />
+            </div>
             <button
               className="btn-primary w-full"
               onClick={() => {
@@ -855,11 +953,24 @@ const LibraryPage = () => {
                   state.library.movementActivities.push({
                     id: crypto.randomUUID(),
                     name: newMovementActivity.name,
-                    kind: newMovementActivity.kind
+                    kind: newMovementActivity.kind,
+                    activityMetrics: {
+                      perMinute: newMovementActivity.perMinute,
+                      perKm: newMovementActivity.perKm,
+                      perStep: newMovementActivity.perStep,
+                      perFlight: newMovementActivity.perFlight
+                    }
                   });
                   return { ...state };
                 });
-                setNewMovementActivity({ name: '', kind: 'march' });
+                setNewMovementActivity({
+                  name: '',
+                  kind: 'march',
+                  perMinute: 0.03,
+                  perKm: 0.3,
+                  perStep: 0.00008,
+                  perFlight: 0.05
+                });
                 setCreateSheet(null);
               }}
             >

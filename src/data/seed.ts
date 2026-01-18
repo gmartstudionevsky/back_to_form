@@ -1,6 +1,6 @@
 import { AppData } from '../types';
 
-export const schemaVersion = 8;
+export const schemaVersion = 10;
 
 export const seedData: AppData = {
   schemaVersion,
@@ -14,7 +14,8 @@ export const seedData: AppData = {
         cues: ['Шея длинная', 'Плечи расслаблены'],
         mistakes: ['Поднятые плечи', 'Резкий рывок'],
         regressions: ['Сделать у стены'],
-        progressions: ['Добавить лёгкое сопротивление']
+        progressions: ['Добавить лёгкое сопротивление'],
+        activityMetrics: { perMinute: 0.04, base: 0.2 }
       },
       {
         id: 'ex-neck-side-bend',
@@ -24,7 +25,8 @@ export const seedData: AppData = {
         cues: ['Плечи вниз'],
         mistakes: ['Крутить головой'],
         regressions: ['Меньше амплитуда'],
-        progressions: ['Лёгкое давление рукой']
+        progressions: ['Лёгкое давление рукой'],
+        activityMetrics: { perMinute: 0.04, base: 0.2 }
       },
       {
         id: 'ex-open-book',
@@ -34,7 +36,8 @@ export const seedData: AppData = {
         cues: ['Колени вместе'],
         mistakes: ['Отрыв коленей'],
         regressions: ['Меньше амплитуда'],
-        progressions: ['Дольше удержание']
+        progressions: ['Дольше удержание'],
+        activityMetrics: { perMinute: 0.04, base: 0.2 }
       },
       {
         id: 'ex-cat-cow',
@@ -44,7 +47,8 @@ export const seedData: AppData = {
         cues: ['Движение мягкое'],
         mistakes: ['Задержка дыхания'],
         regressions: ['Сидя на стуле'],
-        progressions: ['Добавить паузу']
+        progressions: ['Добавить паузу'],
+        activityMetrics: { perMinute: 0.04, base: 0.2 }
       },
       {
         id: 'ex-hip-flexor',
@@ -54,7 +58,8 @@ export const seedData: AppData = {
         cues: ['Корпус ровный'],
         mistakes: ['Прогиб в пояснице'],
         regressions: ['Меньше шаг'],
-        progressions: ['Поднять руку вверх']
+        progressions: ['Поднять руку вверх'],
+        activityMetrics: { perMinute: 0.04, base: 0.2 }
       },
       {
         id: 'ex-glute-bridge',
@@ -64,7 +69,8 @@ export const seedData: AppData = {
         cues: ['Рёбра вниз'],
         mistakes: ['Переразгиб'],
         regressions: ['Меньше амплитуда'],
-        progressions: ['Одна нога']
+        progressions: ['Одна нога'],
+        activityMetrics: { perMinute: 0.04, base: 0.25 }
       },
       {
         id: 'ex-bird-dog',
@@ -74,7 +80,8 @@ export const seedData: AppData = {
         cues: ['Таз стабилен'],
         mistakes: ['Провал в пояснице'],
         regressions: ['По отдельности'],
-        progressions: ['Дольше удержание']
+        progressions: ['Дольше удержание'],
+        activityMetrics: { perMinute: 0.04, base: 0.25 }
       },
       {
         id: 'ex-ankle-wall',
@@ -84,7 +91,8 @@ export const seedData: AppData = {
         cues: ['Контроль'],
         mistakes: ['Отрыв пятки'],
         regressions: ['Меньше дистанция'],
-        progressions: ['Дальше от стены']
+        progressions: ['Дальше от стены'],
+        activityMetrics: { perMinute: 0.04, base: 0.2 }
       },
       {
         id: 'ex-chair-squat',
@@ -94,7 +102,8 @@ export const seedData: AppData = {
         cues: ['Колени наружу'],
         mistakes: ['Падение на стул'],
         regressions: ['Выше короб'],
-        progressions: ['Без коробки']
+        progressions: ['Без коробки'],
+        activityMetrics: { perMinute: 0.05, base: 0.3 }
       },
       {
         id: 'ex-incline-pushup',
@@ -104,7 +113,8 @@ export const seedData: AppData = {
         cues: ['Корпус прямой'],
         mistakes: ['Прогиб'],
         regressions: ['Выше опора'],
-        progressions: ['Ниже опора']
+        progressions: ['Ниже опора'],
+        activityMetrics: { perMinute: 0.05, base: 0.3 }
       },
       {
         id: 'ex-backpack-row',
@@ -114,7 +124,8 @@ export const seedData: AppData = {
         cues: ['Лопатки назад'],
         mistakes: ['Круглая спина'],
         regressions: ['Лёгкий вес'],
-        progressions: ['Тяжелее вес']
+        progressions: ['Тяжелее вес'],
+        activityMetrics: { perMinute: 0.05, base: 0.3 }
       },
       {
         id: 'ex-dead-bug',
@@ -124,7 +135,8 @@ export const seedData: AppData = {
         cues: ['Поясница на полу'],
         mistakes: ['Прогиб'],
         regressions: ['Только руки'],
-        progressions: ['Дольше удержание']
+        progressions: ['Дольше удержание'],
+        activityMetrics: { perMinute: 0.04, base: 0.25 }
       },
       {
         id: 'ex-knee-plank',
@@ -134,7 +146,8 @@ export const seedData: AppData = {
         cues: ['Рёбра вниз'],
         mistakes: ['Провис'],
         regressions: ['Меньше время'],
-        progressions: ['Полная планка']
+        progressions: ['Полная планка'],
+        activityMetrics: { perMinute: 0.04, base: 0.25 }
       },
       {
         id: 'ex-mcgill',
@@ -144,7 +157,8 @@ export const seedData: AppData = {
         cues: ['Шея нейтрально'],
         mistakes: ['Сильный подъём'],
         regressions: ['Меньше время'],
-        progressions: ['Дольше удержание']
+        progressions: ['Дольше удержание'],
+        activityMetrics: { perMinute: 0.04, base: 0.25 }
       }
     ],
     protocols: [
@@ -479,10 +493,36 @@ export const seedData: AppData = {
       }
     ],
     movementActivities: [
-      { id: 'move-run', name: 'Бег', kind: 'run' },
-      { id: 'move-march', name: 'Ходьба на месте', kind: 'march' },
-      { id: 'move-stairs', name: 'Ходьба по лестницам', kind: 'stairs' }
+      {
+        id: 'move-run',
+        name: 'Бег',
+        kind: 'run',
+        activityMetrics: { perMinute: 0.05, perKm: 0.35 }
+      },
+      {
+        id: 'move-march',
+        name: 'Ходьба на месте',
+        kind: 'march',
+        activityMetrics: { perMinute: 0.025, perKm: 0.25, perStep: 0.00008 }
+      },
+      {
+        id: 'move-stairs',
+        name: 'Ходьба по лестницам',
+        kind: 'stairs',
+        activityMetrics: { perMinute: 0.04, perFlight: 0.05 }
+      }
     ],
+    activityDefaults: {
+      workoutPerMinute: 0.04,
+      movementPerMinute: 0.03,
+      step: 0.00008,
+      distanceKm: 0.3,
+      set: 0.12,
+      rep: 0.01,
+      kcal: 0.002,
+      flight: 0.05,
+      exerciseBase: 0.2
+    },
     taskTemplates: [
       {
         id: 'tpl-warmup',
