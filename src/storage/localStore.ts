@@ -27,6 +27,41 @@ const safeRemoveItem = (key: string) => {
   }
 };
 
+
+
+// Merge seed library items into user library items:
+// - Keep user versions for existing ids.
+// - Add new seed items that the user doesn't have.
+// - Fill missing fields from seed for existing ids.
+const mergeById = <T extends { id: string }>(seedItems: T[], userItems?: T[]) => {
+  const user = userItems ?? [];
+  const seedById = new Map(seedItems.map(item => [item.id, item]));
+  const mergedUser = user.map(item => ({
+    ...(seedById.get(item.id) ?? ({} as Partial<T>)),
+    ...item
+  })) as T[];
+  const userIds = new Set(user.map(item => item.id));
+  const additions = seedItems.filter(item => !userIds.has(item.id));
+  return [...mergedUser, ...additions];
+};
+
+// Movement activities should also stay unique by kind (run/march/stairs).
+const mergeMovementActivities = (
+  seedItems: MovementActivity[],
+  userItems?: MovementActivity[]
+) => {
+  const user = userItems ?? [];
+  const seedById = new Map(seedItems.map(item => [item.id, item]));
+  const mergedUser = user.map(item => ({
+    ...(seedById.get(item.id) ?? {}),
+    ...item
+  }));
+  const userIds = new Set(user.map(item => item.id));
+  const userKinds = new Set(user.map(item => item.kind));
+  const additions = seedItems.filter(item => !userIds.has(item.id) && !userKinds.has(item.kind));
+  return [...mergedUser, ...additions];
+};
+
 export const loadData = (): AppData => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -328,6 +363,42 @@ export const loadData = (): AppData => {
           dishPortions: parsed.presets?.dishPortions ?? seedData.presets.dishPortions
         };
       }
+
+      // Ensure new seed library items are appended for existing users
+      // (so library updates propagate without requiring a full reset).
+      migrated.library.products = mergeById(
+        seedData.library.products,
+        migrated.library.products ?? parsed.library?.products
+      );
+      migrated.library.recipes = mergeById(
+        seedData.library.recipes,
+        migrated.library.recipes ?? parsed.library?.recipes
+      );
+      migrated.library.drinks = mergeById(
+        seedData.library.drinks,
+        migrated.library.drinks ?? parsed.library?.drinks
+      );
+      migrated.library.exercises = mergeById(
+        seedData.library.exercises,
+        migrated.library.exercises ?? parsed.library?.exercises
+      );
+      migrated.library.protocols = mergeById(
+        seedData.library.protocols,
+        migrated.library.protocols ?? parsed.library?.protocols
+      );
+      migrated.library.rules = mergeById(
+        seedData.library.rules,
+        migrated.library.rules ?? parsed.library?.rules
+      );
+      migrated.library.taskTemplates = mergeById(
+        seedData.library.taskTemplates,
+        migrated.library.taskTemplates ?? parsed.library?.taskTemplates
+      );
+      migrated.library.movementActivities = mergeMovementActivities(
+        seedData.library.movementActivities,
+        migrated.library.movementActivities ?? parsed.library?.movementActivities
+      );
+
       return migrated;
     }
     logger.info('Storage: loaded cached data', buildLoadMeta(raw, parsed.schemaVersion));
