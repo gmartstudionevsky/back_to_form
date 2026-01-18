@@ -79,22 +79,70 @@ const HealthPage = () => {
     ? Math.min(100, Math.round((hydrationEquivalent / hydrationTarget) * 100))
     : 0;
 
+  const weeklyDates = useMemo(() => {
+    const base = new Date(todayISO());
+    const options = Array.from({ length: 10 }, (_, index) => {
+      const date = new Date(base);
+      date.setDate(base.getDate() - index);
+      return date.toISOString().slice(0, 10);
+    });
+    if (!options.includes(selectedDate)) {
+      options.unshift(selectedDate);
+    }
+    return options;
+  }, [selectedDate]);
+
+  const sleepInsights = useMemo(() => {
+    const recentDates = weeklyDates.slice(0, 7);
+    const logs = data.logs.sleep.filter(log => recentDates.includes(log.date));
+    if (!logs.length) return { average: '—', anchorRate: '—', coverage: 0 };
+    const durations = logs
+      .map(log => {
+        const bed = parseTimeToMinutes(log.bedTime ?? '');
+        const wake = parseTimeToMinutes(log.wakeTime ?? '');
+        if (bed === null || wake === null) return null;
+        let diff = wake - bed;
+        if (diff <= 0) diff += 24 * 60;
+        return diff;
+      })
+      .filter((value): value is number => value !== null);
+    const averageMinutes = durations.length
+      ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length)
+      : null;
+    const anchorRate = Math.round((logs.filter(log => log.anchorMet).length / logs.length) * 100);
+    return {
+      average: averageMinutes ? formatDuration(averageMinutes) : '—',
+      anchorRate: Number.isNaN(anchorRate) ? '—' : `${anchorRate}%`,
+      coverage: Math.round((logs.length / 7) * 100)
+    };
+  }, [data.logs.sleep, parseTimeToMinutes, weeklyDates]);
+
+  const formatDayLabel = (iso: string) =>
+    new Date(iso).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' });
+
   return (
     <section className="space-y-4">
       <header className="space-y-2">
         <h1 className="text-2xl font-bold">Здоровье</h1>
         <p className="text-sm text-slate-500">
-          Контроль привычек, сна, водного баланса и показателей тела.
+          Статистический хаб здоровья: привычки, сон и динамика самочувствия по дням.
         </p>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <input
-            type="date"
-            className="input w-full sm:max-w-[220px]"
-            value={selectedDate}
-            onChange={event => setSelectedDate(event.target.value)}
-          />
-          <Link className="btn-secondary w-full sm:w-auto" to="/track">
-            Открыть полный трекер здоровья
+          <div className="flex flex-wrap gap-2">
+            {weeklyDates.map(date => (
+              <button
+                key={date}
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  selectedDate === date ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'
+                }`}
+                onClick={() => setSelectedDate(date)}
+              >
+                {formatDayLabel(date)}
+              </button>
+            ))}
+          </div>
+          <Link className="btn-secondary w-full sm:w-auto" to="/">
+            Внести факты за сегодня
           </Link>
         </div>
       </header>
@@ -157,25 +205,44 @@ const HealthPage = () => {
           </p>
         </div>
 
-        <div className="card p-4 space-y-3">
-          <h2 className="section-title">Привычки и самочувствие</h2>
-          <ul className="space-y-2 text-sm text-slate-600">
-            <li className="flex items-center justify-between">
-              <span>Сигареты</span>
-              <span className="font-semibold">{smokingLogs.length}</span>
-            </li>
-            <li className="flex items-center justify-between">
-              <span>Вода и напитки</span>
-              <span className="font-semibold">{Math.round(drinkTotalMl)} мл</span>
-            </li>
-            <li className="flex items-center justify-between">
-              <span>Сон</span>
-              <span className="font-semibold">{formatDuration(sleepDuration)}</span>
-            </li>
-          </ul>
-          <Link className="btn-primary w-full" to="/plan">
-            Запланировать привычки
-          </Link>
+        <div className="space-y-3">
+          <div className="card p-4 space-y-3">
+            <h2 className="section-title">Инсайты недели</h2>
+            <div className="space-y-2 text-sm text-slate-600">
+              <p>
+                Средняя длительность сна: <span className="font-semibold">{sleepInsights.average}</span>
+              </p>
+              <p>
+                Якорь соблюдён: <span className="font-semibold">{sleepInsights.anchorRate}</span>
+              </p>
+              <p>
+                Покрытие сна дневниками: <span className="font-semibold">{sleepInsights.coverage}%</span>
+              </p>
+              <p className="text-xs text-slate-500">
+                Отмечайте отклонения — они помогают скорректировать режим.
+              </p>
+            </div>
+          </div>
+          <div className="card p-4 space-y-3">
+            <h2 className="section-title">Привычки и самочувствие</h2>
+            <ul className="space-y-2 text-sm text-slate-600">
+              <li className="flex items-center justify-between">
+                <span>Сигареты</span>
+                <span className="font-semibold">{smokingLogs.length}</span>
+              </li>
+              <li className="flex items-center justify-between">
+                <span>Вода и напитки</span>
+                <span className="font-semibold">{Math.round(drinkTotalMl)} мл</span>
+              </li>
+              <li className="flex items-center justify-between">
+                <span>Сон</span>
+                <span className="font-semibold">{formatDuration(sleepDuration)}</span>
+              </li>
+            </ul>
+            <Link className="btn-primary w-full" to="/plan">
+              Запланировать привычки
+            </Link>
+          </div>
         </div>
       </div>
     </section>
