@@ -1,6 +1,7 @@
 import { AppData, MovementActivity } from '../types';
 import { seedData, schemaVersion } from '../data/seed';
 import { logger } from '../utils/logger';
+import { inferCookingType } from '../utils/nutrition';
 
 const STORAGE_KEY = 'btf-data';
 
@@ -362,6 +363,127 @@ export const loadData = (): AppData => {
           portions: parsed.presets?.portions ?? seedData.presets.portions,
           dishPortions: parsed.presets?.dishPortions ?? seedData.presets.dishPortions
         };
+      }
+      if (!parsed.schemaVersion || parsed.schemaVersion < 17) {
+        const removedRecipes = (parsed.library?.recipes ?? []).filter(recipe =>
+          /боул/i.test(recipe.name)
+        );
+        const removedById = new Map(removedRecipes.map(recipe => [recipe.id, recipe]));
+        migrated.library.products = (migrated.library.products ?? parsed.library?.products ?? []).map(
+          product => ({
+            ...product,
+            proteinPer100g: product.proteinPer100g ?? 0,
+            fatPer100g: product.fatPer100g ?? 0,
+            carbPer100g: product.carbPer100g ?? 0
+          })
+        );
+        migrated.library.recipes = (migrated.library.recipes ?? parsed.library?.recipes ?? [])
+          .filter(recipe => !/боул/i.test(recipe.name))
+          .map(recipe => ({
+            ...recipe,
+            cookingType: recipe.cookingType ?? inferCookingType(recipe.name)
+          }));
+        migrated.logs.foodDays = (migrated.logs.foodDays ?? parsed.logs?.foodDays ?? []).map(day => ({
+          ...day,
+          entries: day.entries.map(entry => {
+            if (entry.kind !== 'dish' || !entry.refId || !removedById.has(entry.refId)) {
+              return entry;
+            }
+            const removed = removedById.get(entry.refId);
+            return {
+              ...entry,
+              kind: 'free',
+              refId: undefined,
+              title: removed ? `${removed.name} (удалено)` : entry.title,
+              notes: [entry.notes, 'Рецепт удалён (Боул).'].filter(Boolean).join(' ')
+            };
+          })
+        }));
+        migrated.planner.dayPlans = (migrated.planner.dayPlans ?? parsed.planner?.dayPlans ?? []).map(
+          plan => ({
+            ...plan,
+            mealsPlan: {
+              breakfast: plan.mealsPlan.breakfast.map(item =>
+                item.kind === 'dish' && item.refId && removedById.has(item.refId)
+                  ? {
+                      ...item,
+                      kind: 'free',
+                      refId: undefined,
+                      title: `${removedById.get(item.refId)?.name ?? item.title ?? 'Блюдо'} (удалено)`
+                    }
+                  : item
+              ),
+              lunch: plan.mealsPlan.lunch.map(item =>
+                item.kind === 'dish' && item.refId && removedById.has(item.refId)
+                  ? {
+                      ...item,
+                      kind: 'free',
+                      refId: undefined,
+                      title: `${removedById.get(item.refId)?.name ?? item.title ?? 'Блюдо'} (удалено)`
+                    }
+                  : item
+              ),
+              dinner: plan.mealsPlan.dinner.map(item =>
+                item.kind === 'dish' && item.refId && removedById.has(item.refId)
+                  ? {
+                      ...item,
+                      kind: 'free',
+                      refId: undefined,
+                      title: `${removedById.get(item.refId)?.name ?? item.title ?? 'Блюдо'} (удалено)`
+                    }
+                  : item
+              ),
+              snack: plan.mealsPlan.snack.map(item =>
+                item.kind === 'dish' && item.refId && removedById.has(item.refId)
+                  ? {
+                      ...item,
+                      kind: 'free',
+                      refId: undefined,
+                      title: `${removedById.get(item.refId)?.name ?? item.title ?? 'Блюдо'} (удалено)`
+                    }
+                  : item
+              )
+            },
+            mealComponents: {
+              breakfast: plan.mealComponents?.breakfast?.map(component =>
+                component.recipeRef && removedById.has(component.recipeRef)
+                  ? {
+                      ...component,
+                      recipeRef: undefined,
+                      notes: [component.notes, 'Рецепт удалён (Боул).'].filter(Boolean).join(' ')
+                    }
+                  : component
+              ) ?? [],
+              lunch: plan.mealComponents?.lunch?.map(component =>
+                component.recipeRef && removedById.has(component.recipeRef)
+                  ? {
+                      ...component,
+                      recipeRef: undefined,
+                      notes: [component.notes, 'Рецепт удалён (Боул).'].filter(Boolean).join(' ')
+                    }
+                  : component
+              ) ?? [],
+              dinner: plan.mealComponents?.dinner?.map(component =>
+                component.recipeRef && removedById.has(component.recipeRef)
+                  ? {
+                      ...component,
+                      recipeRef: undefined,
+                      notes: [component.notes, 'Рецепт удалён (Боул).'].filter(Boolean).join(' ')
+                    }
+                  : component
+              ) ?? [],
+              snack: plan.mealComponents?.snack?.map(component =>
+                component.recipeRef && removedById.has(component.recipeRef)
+                  ? {
+                      ...component,
+                      recipeRef: undefined,
+                      notes: [component.notes, 'Рецепт удалён (Боул).'].filter(Boolean).join(' ')
+                    }
+                  : component
+              ) ?? []
+            }
+          })
+        );
       }
 
       // Ensure new seed library items are appended for existing users
