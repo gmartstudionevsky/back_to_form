@@ -65,6 +65,16 @@ export type PortionPreset = { label: string; grams: number };
 
 export type NutritionTag = 'snack' | 'cheat' | 'healthy';
 
+export type CookingType =
+  | 'raw'
+  | 'boil'
+  | 'fry'
+  | 'stew'
+  | 'bake'
+  | 'steam'
+  | 'grill'
+  | 'mix';
+
 export type NutritionTargets = {
   kcal?: number;
   protein?: number;
@@ -77,9 +87,9 @@ export type Product = {
   id: UUID;
   name: string;
   kcalPer100g: number;
-  proteinPer100g?: number;
-  fatPer100g?: number;
-  carbPer100g?: number;
+  proteinPer100g: number;
+  fatPer100g: number;
+  carbPer100g: number;
   hydrationContribution?: boolean;
   portionPresets?: PortionPreset[];
   pieceGrams?: number;
@@ -99,6 +109,7 @@ export type Recipe = {
   notes?: string;
   tags: string[];
   category: 'breakfast' | 'main' | 'side' | 'salad' | 'snack' | 'dessert' | 'drink' | 'cheat';
+  cookingType: CookingType;
   complexity?: 'easy' | 'medium';
   nutritionTags?: NutritionTag[];
   hydrationContribution?: boolean;

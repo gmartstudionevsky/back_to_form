@@ -2,14 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { BottomSheet } from '../components/BottomSheet';
 import { useAppStore } from '../store/useAppStore';
 import { currentTimeString, todayISO } from '../utils/date';
-import { calcRecipeNutrition } from '../utils/nutrition';
+import { calcRecipeNutrition, cookingTypeLabels } from '../utils/nutrition';
 import { savePhotoBlob } from '../storage/photoDb';
 import {
+  CookingType,
   Drink,
   Exercise,
   FoodEntry,
   MovementActivity,
   NutritionTag,
+  Product,
   Recipe,
   TaskTemplate
 } from '../types';
@@ -47,7 +49,25 @@ const LibraryPage = () => {
   const [activeSection, setActiveSection] = useState<LibrarySection>('Питание');
   const [activeTab, setActiveTab] = useState<LibraryTab>('Продукты');
   const [query, setQuery] = useState('');
+  const [nutritionFilters, setNutritionFilters] = useState<NutritionTag[]>([]);
+  const [cookingFilter, setCookingFilter] = useState<CookingType | 'all'>('all');
   const [detailItem, setDetailItem] = useState<unknown | null>(null);
+  const [isEditingDetail, setIsEditingDetail] = useState(false);
+  const [editProduct, setEditProduct] = useState<Product | null>(null);
+  const [editRecipeError, setEditRecipeError] = useState('');
+  const [editRecipe, setEditRecipe] = useState<{
+    id: string;
+    name: string;
+    servings: number;
+    category: Recipe['category'];
+    cookingType: CookingType;
+    tagsText: string;
+    stepsText: string;
+    nutritionTags: NutritionTag[];
+    hydrationContribution: boolean;
+    ingredients: { productRef: string; grams: number }[];
+  } | null>(null);
+  const [editDrink, setEditDrink] = useState<Drink | null>(null);
   const [foodSheet, setFoodSheet] = useState<FoodSheetItem | null>(null);
   const [taskSheet, setTaskSheet] = useState<TaskTemplate | null>(null);
   const [createSheet, setCreateSheet] = useState<
@@ -72,6 +92,7 @@ const LibraryPage = () => {
     name: '',
     servings: 1,
     category: 'main' as Recipe['category'],
+    cookingType: 'mix' as CookingType,
     nutritionTags: [] as NutritionTag[],
     hydrationContribution: false
   });
@@ -148,6 +169,51 @@ const LibraryPage = () => {
   }, [detailItem]);
 
   useEffect(() => {
+    setIsEditingDetail(false);
+    setEditRecipeError('');
+    if (!detailItem) {
+      setEditProduct(null);
+      setEditRecipe(null);
+      setEditDrink(null);
+      return;
+    }
+    if ('kcalPer100g' in (detailItem as Product)) {
+      setEditProduct({ ...(detailItem as Product) });
+    } else {
+      setEditProduct(null);
+    }
+    if ('ingredients' in (detailItem as Recipe)) {
+      const recipe = detailItem as Recipe;
+      setEditRecipe({
+        id: recipe.id,
+        name: recipe.name,
+        servings: recipe.servings,
+        category: recipe.category,
+        cookingType: recipe.cookingType,
+        tagsText: recipe.tags.join(', '),
+        stepsText: recipe.steps.join('\n'),
+        nutritionTags: recipe.nutritionTags ?? [],
+        hydrationContribution: recipe.hydrationContribution ?? false,
+        ingredients: recipe.ingredients.map(ingredient => ({ ...ingredient }))
+      });
+    } else {
+      setEditRecipe(null);
+    }
+    if ('portions' in (detailItem as Drink)) {
+      setEditDrink({ ...(detailItem as Drink) });
+    } else {
+      setEditDrink(null);
+    }
+  }, [detailItem]);
+
+  useEffect(() => {
+    if (activeSection !== 'Питание') {
+      setNutritionFilters([]);
+      setCookingFilter('all');
+    }
+  }, [activeSection]);
+
+  useEffect(() => {
     setActiveTab(librarySections[activeSection][0]);
   }, [activeSection]);
 
@@ -155,15 +221,24 @@ const LibraryPage = () => {
     const normalize = (value: string) => value.toLowerCase();
     const q = normalize(query);
     const match = (value: string) => normalize(value).includes(q);
+    const matchesNutrition = (tags?: NutritionTag[]) =>
+      nutritionFilters.length === 0
+        ? true
+        : (tags ?? []).some(tag => nutritionFilters.includes(tag));
     switch (activeTab) {
       case 'Упражнения':
         return data.library.exercises.filter(item => match(item.name));
       case 'Протоколы':
         return data.library.protocols.filter(item => match(item.name));
       case 'Продукты':
-        return data.library.products.filter(item => match(item.name));
+        return data.library.products
+          .filter(item => match(item.name))
+          .filter(item => matchesNutrition(item.nutritionTags));
       case 'Блюда':
-        return data.library.recipes.filter(item => match(item.name));
+        return data.library.recipes
+          .filter(item => match(item.name))
+          .filter(item => matchesNutrition(item.nutritionTags))
+          .filter(item => (cookingFilter === 'all' ? true : item.cookingType === cookingFilter));
       case 'Шаблоны':
         return data.library.taskTemplates.filter(item => match(item.title));
       case 'Правила':
@@ -175,7 +250,7 @@ const LibraryPage = () => {
       default:
         return [];
     }
-  }, [activeTab, data.library, query]);
+  }, [activeTab, cookingFilter, data.library, nutritionFilters, query]);
 
   const openFoodSheet = (item: FoodSheetItem) => {
     setFoodForm({
@@ -233,6 +308,12 @@ const LibraryPage = () => {
     }));
   };
 
+  const toggleNutritionFilter = (tag: NutritionTag) => {
+    setNutritionFilters(prev =>
+      prev.includes(tag) ? prev.filter(item => item !== tag) : [...prev, tag]
+    );
+  };
+
   const sectionTabs = librarySections[activeSection];
 
   return (
@@ -274,6 +355,54 @@ const LibraryPage = () => {
             </button>
           ))}
         </div>
+        {activeSection === 'Питание' ? (
+          <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Метки питания
+              </span>
+              {(Object.keys(nutritionTagLabels) as NutritionTag[]).map(tag => (
+                <button
+                  key={tag}
+                  className={
+                    nutritionFilters.includes(tag)
+                      ? 'badge bg-slate-900 text-white'
+                      : 'badge text-slate-600'
+                  }
+                  onClick={() => toggleNutritionFilter(tag)}
+                >
+                  {nutritionTagLabels[tag]}
+                </button>
+              ))}
+              {nutritionFilters.length ? (
+                <button className="badge text-slate-400" onClick={() => setNutritionFilters([])}>
+                  Сбросить
+                </button>
+              ) : null}
+            </div>
+            {activeTab === 'Блюда' ? (
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Тип готовки
+                </span>
+                <select
+                  className="input h-9 w-auto text-xs"
+                  value={cookingFilter}
+                  onChange={event =>
+                    setCookingFilter(event.target.value as CookingType | 'all')
+                  }
+                >
+                  <option value="all">Все типы</option>
+                  {Object.entries(cookingTypeLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <div className="flex flex-col gap-2 sm:flex-row">
           {activeSection === 'Питание' ? (
             <>
@@ -325,7 +454,10 @@ const LibraryPage = () => {
                   {'title' in item ? (item as any).title : (item as any).name}
                 </h3>
                 {'kcalPer100g' in item ? (
-                  <p className="text-sm text-slate-500">{(item as any).kcalPer100g} ккал/100г</p>
+                  <p className="text-sm text-slate-500">
+                    {(item as Product).kcalPer100g} ккал · Б {(item as Product).proteinPer100g} · Ж{' '}
+                    {(item as Product).fatPer100g} · У {(item as Product).carbPer100g}
+                  </p>
                 ) : null}
                 {'category' in item ? (
                   <p className="text-xs text-slate-500">Категория: {(item as Recipe).category}</p>
@@ -493,121 +625,645 @@ const LibraryPage = () => {
 
         {detailItem && 'ingredients' in (detailItem as any) ? (
           <div className="space-y-3 text-sm text-slate-600">
-            <div>
-              <p className="text-xs font-semibold uppercase text-slate-400">Состав</p>
-              <ul className="mt-2 list-disc space-y-1 pl-5">
-                {(detailItem as Recipe).ingredients.map(ingredient => {
-                  const product = data.library.products.find(
-                    item => item.id === ingredient.productRef
-                  );
-                  return (
-                    <li key={ingredient.productRef}>
-                      {product?.name ?? 'Продукт'} — {ingredient.grams} г
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase text-slate-400">Шаги</p>
-              <ul className="mt-2 list-disc space-y-1 pl-5">
-                {(detailItem as Recipe).steps.map((step, index) => (
-                  <li key={index}>{step}</li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl bg-slate-50 p-3">
-              <p className="text-xs uppercase text-slate-400">Нутриенты на порцию</p>
-              <p className="text-sm">
-                {(() => {
-                  const nutrition = calcRecipeNutrition(detailItem as Recipe, data.library);
-                  return `${nutrition.perServing.kcal.toFixed(0)} ккал, Б ${nutrition.perServing.protein.toFixed(
-                    1
-                  )} / Ж ${nutrition.perServing.fat.toFixed(1)} / У ${nutrition.perServing.carb.toFixed(1)}`;
-                })()}
-              </p>
-            </div>
-            {(detailItem as Recipe).nutritionTags?.length ? (
-              <div>
-                <p className="text-xs font-semibold uppercase text-slate-400">Метки питания</p>
-                <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
-                  {(detailItem as Recipe).nutritionTags?.map(tag => (
-                    <span key={tag} className="badge">
-                      {nutritionTagLabels[tag]}
-                    </span>
-                  ))}
+            {isEditingDetail && editRecipe ? (
+              <div className="space-y-3">
+                <input
+                  className="input"
+                  value={editRecipe.name}
+                  onChange={event =>
+                    setEditRecipe(prev => (prev ? { ...prev, name: event.target.value } : prev))
+                  }
+                />
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <input
+                    className="input"
+                    type="number"
+                    value={editRecipe.servings}
+                    onChange={event =>
+                      setEditRecipe(prev =>
+                        prev ? { ...prev, servings: Number(event.target.value) } : prev
+                      )
+                    }
+                  />
+                  <select
+                    className="input"
+                    value={editRecipe.category}
+                    onChange={event =>
+                      setEditRecipe(prev =>
+                        prev
+                          ? { ...prev, category: event.target.value as Recipe['category'] }
+                          : prev
+                      )
+                    }
+                  >
+                    <option value="breakfast">Завтрак</option>
+                    <option value="main">Основное</option>
+                    <option value="side">Гарнир</option>
+                    <option value="salad">Салат</option>
+                    <option value="snack">Перекус</option>
+                    <option value="dessert">Десерт</option>
+                    <option value="drink">Напиток</option>
+                    <option value="cheat">Читмил</option>
+                  </select>
                 </div>
+                <select
+                  className="input"
+                  value={editRecipe.cookingType}
+                  onChange={event =>
+                    setEditRecipe(prev =>
+                      prev
+                        ? { ...prev, cookingType: event.target.value as CookingType }
+                        : prev
+                    )
+                  }
+                >
+                  {Object.entries(cookingTypeLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="input"
+                  placeholder="Теги через запятую"
+                  value={editRecipe.tagsText}
+                  onChange={event =>
+                    setEditRecipe(prev => (prev ? { ...prev, tagsText: event.target.value } : prev))
+                  }
+                />
+                <textarea
+                  className="input min-h-[120px]"
+                  placeholder="Шаги (каждый с новой строки)"
+                  value={editRecipe.stepsText}
+                  onChange={event =>
+                    setEditRecipe(prev =>
+                      prev ? { ...prev, stepsText: event.target.value } : prev
+                    )
+                  }
+                />
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase text-slate-400">Ингредиенты</p>
+                  {editRecipe.ingredients.map((ingredient, index) => (
+                    <div key={`${ingredient.productRef}-${index}`} className="flex gap-2">
+                      <select
+                        className="input flex-1"
+                        value={ingredient.productRef}
+                        onChange={event =>
+                          setEditRecipe(prev => {
+                            if (!prev) return prev;
+                            const next = [...prev.ingredients];
+                            next[index] = { ...next[index], productRef: event.target.value };
+                            return { ...prev, ingredients: next };
+                          })
+                        }
+                      >
+                        <option value="">Выберите продукт</option>
+                        {data.library.products.map(product => (
+                          <option key={product.id} value={product.id}>
+                            {product.name}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        className="input w-24"
+                        type="number"
+                        value={ingredient.grams}
+                        onChange={event =>
+                          setEditRecipe(prev => {
+                            if (!prev) return prev;
+                            const next = [...prev.ingredients];
+                            next[index] = {
+                              ...next[index],
+                              grams: Number(event.target.value)
+                            };
+                            return { ...prev, ingredients: next };
+                          })
+                        }
+                      />
+                      <button
+                        className="btn-secondary"
+                        onClick={() =>
+                          setEditRecipe(prev => {
+                            if (!prev) return prev;
+                            return {
+                              ...prev,
+                              ingredients: prev.ingredients.filter((_, idx) => idx !== index)
+                            };
+                          })
+                        }
+                      >
+                        Удалить
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    className="btn-secondary w-full"
+                    onClick={() =>
+                      setEditRecipe(prev => {
+                        if (!prev) return prev;
+                        const fallbackProduct = data.library.products[0]?.id ?? '';
+                        return {
+                          ...prev,
+                          ingredients: [
+                            ...prev.ingredients,
+                            { productRef: fallbackProduct, grams: 0 }
+                          ]
+                        };
+                      })
+                    }
+                  >
+                    + Добавить ингредиент
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase text-slate-400">Метки питания</p>
+                  <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+                    {(Object.keys(nutritionTagLabels) as NutritionTag[]).map(tag => (
+                      <label key={tag} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={editRecipe.nutritionTags.includes(tag)}
+                          onChange={() =>
+                            setEditRecipe(prev =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    nutritionTags: prev.nutritionTags.includes(tag)
+                                      ? prev.nutritionTags.filter(item => item !== tag)
+                                      : [...prev.nutritionTags, tag]
+                                  }
+                                : prev
+                            )
+                          }
+                        />
+                        {nutritionTagLabels[tag]}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-slate-600">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={editRecipe.hydrationContribution}
+                    onChange={() =>
+                      setEditRecipe(prev =>
+                        prev
+                          ? { ...prev, hydrationContribution: !prev.hydrationContribution }
+                          : prev
+                      )
+                    }
+                  />
+                  Восполняет водный баланс
+                </label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    className="btn-primary w-full sm:w-auto"
+                    onClick={() => {
+                      const invalidIngredient = editRecipe.ingredients.find(
+                        ingredient => !ingredient.productRef || ingredient.grams <= 0
+                      );
+                      if (editRecipe.ingredients.length === 0 || invalidIngredient) {
+                        setEditRecipeError(
+                          'Добавьте минимум один ингредиент с продуктом и граммовкой больше 0.'
+                        );
+                        return;
+                      }
+                      setEditRecipeError('');
+                      const updatedRecipe: Recipe = {
+                        id: editRecipe.id,
+                        name: editRecipe.name.trim(),
+                        servings: editRecipe.servings || 1,
+                        category: editRecipe.category,
+                        cookingType: editRecipe.cookingType,
+                        tags: editRecipe.tagsText
+                          .split(',')
+                          .map(tag => tag.trim())
+                          .filter(Boolean),
+                        steps: editRecipe.stepsText
+                          .split('\n')
+                          .map(step => step.trim())
+                          .filter(Boolean),
+                        ingredients: editRecipe.ingredients,
+                        nutritionTags: editRecipe.nutritionTags,
+                        hydrationContribution: editRecipe.hydrationContribution
+                      };
+                      updateData(state => {
+                        state.library.recipes = state.library.recipes.map(item =>
+                          item.id === updatedRecipe.id ? updatedRecipe : item
+                        );
+                        return { ...state };
+                      });
+                      setDetailItem(updatedRecipe);
+                      setIsEditingDetail(false);
+                    }}
+                  >
+                    Сохранить
+                  </button>
+                  <button
+                    className="btn-secondary w-full sm:w-auto"
+                    onClick={() => setIsEditingDetail(false)}
+                  >
+                    Отмена
+                  </button>
+                </div>
+                {editRecipeError ? (
+                  <p className="text-xs text-red-500">{editRecipeError}</p>
+                ) : null}
               </div>
-            ) : null}
-            {(detailItem as Recipe).hydrationContribution ? (
-              <div>
-                <p className="text-xs font-semibold uppercase text-slate-400">Водный баланс</p>
-                <span className="badge">Учитывается</span>
-              </div>
-            ) : null}
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="badge">{cookingTypeLabels[(detailItem as Recipe).cookingType]}</span>
+                  <span className="badge">{(detailItem as Recipe).category}</span>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase text-slate-400">Состав</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5">
+                    {(detailItem as Recipe).ingredients.map(ingredient => {
+                      const product = data.library.products.find(
+                        item => item.id === ingredient.productRef
+                      );
+                      return (
+                        <li key={ingredient.productRef}>
+                          {product?.name ?? 'Продукт'} — {ingredient.grams} г
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase text-slate-400">Шаги</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5">
+                    {(detailItem as Recipe).steps.map((step, index) => (
+                      <li key={index}>{step}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3">
+                  <p className="text-xs uppercase text-slate-400">
+                    Нутриенты на порцию (с учётом типа готовки)
+                  </p>
+                  <p className="text-sm">
+                    {(() => {
+                      const nutrition = calcRecipeNutrition(detailItem as Recipe, data.library);
+                      return `${nutrition.perServing.kcal.toFixed(0)} ккал, Б ${nutrition.perServing.protein.toFixed(
+                        1
+                      )} / Ж ${nutrition.perServing.fat.toFixed(1)} / У ${nutrition.perServing.carb.toFixed(1)}`;
+                    })()}
+                  </p>
+                </div>
+                {(detailItem as Recipe).nutritionTags?.length ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-400">Метки питания</p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                      {(detailItem as Recipe).nutritionTags?.map(tag => (
+                        <span key={tag} className="badge">
+                          {nutritionTagLabels[tag]}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {(detailItem as Recipe).hydrationContribution ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-400">Водный баланс</p>
+                    <span className="badge">Учитывается</span>
+                  </div>
+                ) : null}
+                <button
+                  className="btn-secondary w-full sm:w-auto"
+                  onClick={() => setIsEditingDetail(true)}
+                >
+                  Редактировать блюдо
+                </button>
+              </>
+            )}
           </div>
         ) : null}
 
         {detailItem && 'kcalPer100g' in (detailItem as any) ? (
           <div className="space-y-2 text-sm text-slate-600">
-            <p>Калории: {(detailItem as any).kcalPer100g} ккал/100г</p>
-            {(detailItem as any).nutritionTags?.length ? (
-              <div>
-                <p className="text-xs font-semibold uppercase text-slate-400">Метки питания</p>
-                <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
-                  {(detailItem as any).nutritionTags.map((tag: NutritionTag) => (
-                    <span key={tag} className="badge">
-                      {nutritionTagLabels[tag]}
-                    </span>
-                  ))}
+            {isEditingDetail && editProduct ? (
+              <div className="space-y-3">
+                <input
+                  className="input"
+                  value={editProduct.name}
+                  onChange={event =>
+                    setEditProduct(prev => (prev ? { ...prev, name: event.target.value } : prev))
+                  }
+                />
+                <input
+                  className="input"
+                  type="number"
+                  value={editProduct.kcalPer100g}
+                  onChange={event =>
+                    setEditProduct(prev =>
+                      prev ? { ...prev, kcalPer100g: Number(event.target.value) } : prev
+                    )
+                  }
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    className="input"
+                    type="number"
+                    value={editProduct.proteinPer100g}
+                    onChange={event =>
+                      setEditProduct(prev =>
+                        prev ? { ...prev, proteinPer100g: Number(event.target.value) } : prev
+                      )
+                    }
+                  />
+                  <input
+                    className="input"
+                    type="number"
+                    value={editProduct.fatPer100g}
+                    onChange={event =>
+                      setEditProduct(prev =>
+                        prev ? { ...prev, fatPer100g: Number(event.target.value) } : prev
+                      )
+                    }
+                  />
+                </div>
+                <input
+                  className="input"
+                  type="number"
+                  value={editProduct.carbPer100g}
+                  onChange={event =>
+                    setEditProduct(prev =>
+                      prev ? { ...prev, carbPer100g: Number(event.target.value) } : prev
+                    )
+                  }
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    className="input"
+                    type="number"
+                    placeholder="Грамм в 1 шт"
+                    value={editProduct.pieceGrams ?? 0}
+                    onChange={event =>
+                      setEditProduct(prev =>
+                        prev ? { ...prev, pieceGrams: Number(event.target.value) } : prev
+                      )
+                    }
+                  />
+                  <input
+                    className="input"
+                    placeholder="Подпись (шт.)"
+                    value={editProduct.pieceLabel ?? 'шт.'}
+                    onChange={event =>
+                      setEditProduct(prev =>
+                        prev ? { ...prev, pieceLabel: event.target.value } : prev
+                      )
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase text-slate-400">Метки питания</p>
+                  <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+                    {(Object.keys(nutritionTagLabels) as NutritionTag[]).map(tag => (
+                      <label key={tag} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={(editProduct.nutritionTags ?? []).includes(tag)}
+                          onChange={() =>
+                            setEditProduct(prev => {
+                              if (!prev) return prev;
+                              const tags = prev.nutritionTags ?? [];
+                              return {
+                                ...prev,
+                                nutritionTags: tags.includes(tag)
+                                  ? tags.filter(item => item !== tag)
+                                  : [...tags, tag]
+                              };
+                            })
+                          }
+                        />
+                        {nutritionTagLabels[tag]}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-slate-600">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={editProduct.hydrationContribution ?? false}
+                    onChange={() =>
+                      setEditProduct(prev =>
+                        prev
+                          ? { ...prev, hydrationContribution: !prev.hydrationContribution }
+                          : prev
+                      )
+                    }
+                  />
+                  Восполняет водный баланс
+                </label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    className="btn-primary w-full sm:w-auto"
+                    onClick={() => {
+                      if (!editProduct.name.trim()) return;
+                      const updatedProduct = {
+                        ...editProduct,
+                        name: editProduct.name.trim(),
+                        pieceGrams: editProduct.pieceGrams || undefined,
+                        pieceLabel: editProduct.pieceGrams
+                          ? editProduct.pieceLabel ?? 'шт.'
+                          : undefined
+                      };
+                      updateData(state => {
+                        state.library.products = state.library.products.map(item =>
+                          item.id === updatedProduct.id ? updatedProduct : item
+                        );
+                        return { ...state };
+                      });
+                      setDetailItem(updatedProduct);
+                      setIsEditingDetail(false);
+                    }}
+                  >
+                    Сохранить
+                  </button>
+                  <button
+                    className="btn-secondary w-full sm:w-auto"
+                    onClick={() => setIsEditingDetail(false)}
+                  >
+                    Отмена
+                  </button>
                 </div>
               </div>
-            ) : null}
-            {((detailItem as any).portionPresets ?? []).length > 0 ? (
-              <div>
-                <p className="text-xs font-semibold uppercase text-slate-400">Шаблоны</p>
-                <div className="control-row mt-2">
-                  {(detailItem as any).portionPresets.map((preset: any) => (
-                    <span key={preset.label} className="badge">
-                      {preset.label} · {preset.grams} г
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            {(detailItem as any).pieceGrams ? (
-              <div>
-                <p className="text-xs font-semibold uppercase text-slate-400">Поштучно</p>
-                <span className="badge">{(detailItem as any).pieceLabel ?? 'шт.'}</span>
-              </div>
-            ) : null}
-            {(detailItem as any).hydrationContribution ? (
-              <div>
-                <p className="text-xs font-semibold uppercase text-slate-400">Водный баланс</p>
-                <span className="badge">Учитывается</span>
-              </div>
-            ) : null}
+            ) : (
+              <>
+                <p>
+                  КБЖУ: {(detailItem as Product).kcalPer100g} ккал · Б{' '}
+                  {(detailItem as Product).proteinPer100g} · Ж {(detailItem as Product).fatPer100g}{' '}
+                  · У {(detailItem as Product).carbPer100g}
+                </p>
+                {(detailItem as Product).nutritionTags?.length ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-400">Метки питания</p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                      {(detailItem as Product).nutritionTags?.map((tag: NutritionTag) => (
+                        <span key={tag} className="badge">
+                          {nutritionTagLabels[tag]}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {((detailItem as Product).portionPresets ?? []).length > 0 ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-400">Шаблоны</p>
+                    <div className="control-row mt-2">
+                      {(detailItem as Product).portionPresets?.map(preset => (
+                        <span key={preset.label} className="badge">
+                          {preset.label} · {preset.grams} г
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {(detailItem as Product).pieceGrams ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-400">Поштучно</p>
+                    <span className="badge">{(detailItem as Product).pieceLabel ?? 'шт.'}</span>
+                  </div>
+                ) : null}
+                {(detailItem as Product).hydrationContribution ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-400">Водный баланс</p>
+                    <span className="badge">Учитывается</span>
+                  </div>
+                ) : null}
+                <button
+                  className="btn-secondary w-full sm:w-auto"
+                  onClick={() => setIsEditingDetail(true)}
+                >
+                  Редактировать продукт
+                </button>
+              </>
+            )}
           </div>
         ) : null}
 
         {detailItem && 'portions' in (detailItem as Drink) ? (
           <div className="space-y-2 text-sm text-slate-600">
-            <p>Гидратация: {(detailItem as Drink).hydrationFactor}</p>
-            <p>
-              КБЖУ: {(detailItem as Drink).kcalPer100ml ?? 0} ккал · Б{' '}
-              {(detailItem as Drink).proteinPer100ml ?? 0} · Ж{' '}
-              {(detailItem as Drink).fatPer100ml ?? 0} · У {(detailItem as Drink).carbPer100ml ?? 0}
-            </p>
-            <div>
-              <p className="text-xs font-semibold uppercase text-slate-400">Порции</p>
-              <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
-                {(detailItem as Drink).portions.map(portion => (
-                  <span key={portion.label} className="badge">
-                    {portion.label} · {portion.ml} мл
-                  </span>
-                ))}
+            {isEditingDetail && editDrink ? (
+              <div className="space-y-3">
+                <input
+                  className="input"
+                  value={editDrink.name}
+                  onChange={event =>
+                    setEditDrink(prev => (prev ? { ...prev, name: event.target.value } : prev))
+                  }
+                />
+                <input
+                  className="input"
+                  type="number"
+                  step="0.1"
+                  value={editDrink.hydrationFactor}
+                  onChange={event =>
+                    setEditDrink(prev =>
+                      prev ? { ...prev, hydrationFactor: Number(event.target.value) } : prev
+                    )
+                  }
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    className="input"
+                    type="number"
+                    value={editDrink.kcalPer100ml ?? 0}
+                    onChange={event =>
+                      setEditDrink(prev =>
+                        prev ? { ...prev, kcalPer100ml: Number(event.target.value) } : prev
+                      )
+                    }
+                  />
+                  <input
+                    className="input"
+                    type="number"
+                    value={editDrink.proteinPer100ml ?? 0}
+                    onChange={event =>
+                      setEditDrink(prev =>
+                        prev ? { ...prev, proteinPer100ml: Number(event.target.value) } : prev
+                      )
+                    }
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    className="input"
+                    type="number"
+                    value={editDrink.fatPer100ml ?? 0}
+                    onChange={event =>
+                      setEditDrink(prev =>
+                        prev ? { ...prev, fatPer100ml: Number(event.target.value) } : prev
+                      )
+                    }
+                  />
+                  <input
+                    className="input"
+                    type="number"
+                    value={editDrink.carbPer100ml ?? 0}
+                    onChange={event =>
+                      setEditDrink(prev =>
+                        prev ? { ...prev, carbPer100ml: Number(event.target.value) } : prev
+                      )
+                    }
+                  />
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    className="btn-primary w-full sm:w-auto"
+                    onClick={() => {
+                      updateData(state => {
+                        state.library.drinks = state.library.drinks.map(item =>
+                          item.id === editDrink.id ? editDrink : item
+                        );
+                        return { ...state };
+                      });
+                      setDetailItem(editDrink);
+                      setIsEditingDetail(false);
+                    }}
+                  >
+                    Сохранить
+                  </button>
+                  <button
+                    className="btn-secondary w-full sm:w-auto"
+                    onClick={() => setIsEditingDetail(false)}
+                  >
+                    Отмена
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : (
+              <>
+                <p>Гидратация: {(detailItem as Drink).hydrationFactor}</p>
+                <p>
+                  КБЖУ: {(detailItem as Drink).kcalPer100ml ?? 0} ккал · Б{' '}
+                  {(detailItem as Drink).proteinPer100ml ?? 0} · Ж{' '}
+                  {(detailItem as Drink).fatPer100ml ?? 0} · У {(detailItem as Drink).carbPer100ml ?? 0}
+                </p>
+                <div>
+                  <p className="text-xs font-semibold uppercase text-slate-400">Порции</p>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                    {(detailItem as Drink).portions.map(portion => (
+                      <span key={portion.label} className="badge">
+                        {portion.label} · {portion.ml} мл
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  className="btn-secondary w-full sm:w-auto"
+                  onClick={() => setIsEditingDetail(true)}
+                >
+                  Редактировать напиток
+                </button>
+              </>
+            )}
           </div>
         ) : null}
 
@@ -856,6 +1512,19 @@ const LibraryPage = () => {
               <option value="drink">Напиток</option>
               <option value="cheat">Читмил</option>
             </select>
+            <select
+              className="input"
+              value={newDish.cookingType}
+              onChange={event =>
+                setNewDish(prev => ({ ...prev, cookingType: event.target.value as CookingType }))
+              }
+            >
+              {Object.entries(cookingTypeLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
             <div className="space-y-2">
               <p className="text-sm font-semibold text-slate-600">Метки питания</p>
               <div className="flex flex-wrap gap-2 text-xs text-slate-600">
@@ -899,6 +1568,7 @@ const LibraryPage = () => {
                     steps: [],
                     tags: [],
                     category: newDish.category,
+                    cookingType: newDish.cookingType,
                     nutritionTags: newDish.nutritionTags,
                     hydrationContribution: newDish.hydrationContribution
                   });
@@ -908,6 +1578,7 @@ const LibraryPage = () => {
                   name: '',
                   servings: 1,
                   category: 'main',
+                  cookingType: 'mix',
                   nutritionTags: [],
                   hydrationContribution: false
                 });
@@ -1023,9 +1694,9 @@ const LibraryPage = () => {
                     id: crypto.randomUUID(),
                     name: newProduct.name,
                     kcalPer100g: newProduct.kcalPer100g,
-                    proteinPer100g: newProduct.proteinPer100g || undefined,
-                    fatPer100g: newProduct.fatPer100g || undefined,
-                    carbPer100g: newProduct.carbPer100g || undefined,
+                    proteinPer100g: newProduct.proteinPer100g,
+                    fatPer100g: newProduct.fatPer100g,
+                    carbPer100g: newProduct.carbPer100g,
                     nutritionTags: newProduct.nutritionTags,
                     hydrationContribution: newProduct.hydrationContribution,
                     pieceGrams: newProduct.pieceGrams || undefined,

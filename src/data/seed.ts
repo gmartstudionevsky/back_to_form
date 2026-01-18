@@ -1,6 +1,24 @@
-import { AppData } from '../types';
+import { AppData, CookingType, Product, Recipe } from '../types';
+import { inferCookingType } from '../utils/nutrition';
 
-export const schemaVersion = 16;
+export const schemaVersion = 17;
+
+type RawProduct = Omit<Product, 'proteinPer100g' | 'fatPer100g' | 'carbPer100g'> &
+  Partial<Pick<Product, 'proteinPer100g' | 'fatPer100g' | 'carbPer100g'>>;
+
+type RawRecipe = Omit<Recipe, 'cookingType'> & { cookingType?: CookingType };
+
+const ensureProductMacros = (product: RawProduct): Product => ({
+  ...product,
+  proteinPer100g: product.proteinPer100g ?? 0,
+  fatPer100g: product.fatPer100g ?? 0,
+  carbPer100g: product.carbPer100g ?? 0
+});
+
+const normalizeRecipeCooking = (recipe: RawRecipe): Recipe => ({
+  ...recipe,
+  cookingType: recipe.cookingType ?? inferCookingType(recipe.name)
+});
 
 export const seedData: AppData = {
   schemaVersion,
@@ -191,7 +209,7 @@ export const seedData: AppData = {
         ]
       }
     ],
-    products: [
+    products: ([
       {
         id: 'prod-chicken-thighs',
         name: 'Куриные бёдра (сырые, approx)',
@@ -3035,8 +3053,8 @@ export const seedData: AppData = {
       },
 
 
-    ],
-    recipes: [
+    ] as RawProduct[]).map(ensureProductMacros),
+    recipes: ([
       {
         id: 'rec-baked-chicken',
         name: 'Запечённая курица',
@@ -9517,7 +9535,9 @@ export const seedData: AppData = {
         complexity: 'easy',
         nutritionTags: ['cheat'],
       },
-],
+    ] as RawRecipe[])
+      .filter(recipe => !/боул/i.test(recipe.name))
+      .map(normalizeRecipeCooking),
     drinks: [
       {
         id: 'drink-water',
