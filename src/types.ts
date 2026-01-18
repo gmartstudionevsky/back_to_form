@@ -73,6 +73,8 @@ export type Product = {
   carbPer100g?: number;
   hydrationContribution?: boolean;
   portionPresets?: PortionPreset[];
+  pieceGrams?: number;
+  pieceLabel?: string;
   nutritionTags?: NutritionTag[];
   notes?: string;
 };
@@ -183,7 +185,9 @@ export type FoodEntry = {
   kind: 'product' | 'dish' | 'free' | 'cheat';
   refId?: UUID;
   grams?: number;
+  pieces?: number;
   servings?: number;
+  portionLabel?: string;
   kcalOverride?: number;
   proteinOverride?: number;
   fatOverride?: number;
@@ -200,7 +204,9 @@ export type MealPlanItem = {
   refId?: UUID;
   title?: string;
   plannedGrams?: number;
+  plannedPieces?: number;
   plannedServings?: number;
+  plannedPortionLabel?: string;
   plannedKcal?: number;
   plannedProtein?: number;
   plannedFat?: number;
@@ -404,5 +410,6 @@ export type AppData = {
   logs: LogsState;
   presets: {
     portions: { label: string; grams: number }[];
+    dishPortions: { label: string; servings: number }[];
   };
 };

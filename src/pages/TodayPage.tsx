@@ -4,7 +4,12 @@ import { WorkoutRunner } from '../components/WorkoutRunner';
 import { savePhotoBlob } from '../storage/photoDb';
 import { useAppStore } from '../store/useAppStore';
 import { combineDateTime, currentTimeString, formatDate, todayISO } from '../utils/date';
-import { calcFoodEntry, calcMealPlanItem, calcRecipeNutrition } from '../utils/nutrition';
+import {
+  calcFoodEntry,
+  calcMealPlanItem,
+  calcRecipeNutrition,
+  resolveProductGrams
+} from '../utils/nutrition';
 import {
   calcMovementActivityMetrics,
   calcPlannedWorkoutCoefficient,
@@ -128,7 +133,10 @@ const TodayPage = () => {
     kind: 'product' as const,
     refId: '',
     grams: 120,
+    pieces: 1,
+    portionMode: 'grams' as 'grams' | 'pieces',
     servings: 1,
+    portionLabel: '',
     meal: 'breakfast' as const,
     time: currentTimeString(),
     title: '',
@@ -198,6 +206,9 @@ const TodayPage = () => {
         meal => dayPlan.mealsPlan[meal].length > 0 || Boolean(dayPlan.mealTimes?.[meal])
       ).length
     : 0;
+  const selectedProduct = data.library.products.find(product => product.id === foodForm.refId);
+  const productSupportsPieces = Boolean(selectedProduct?.pieceGrams);
+  const productPieceLabel = selectedProduct?.pieceLabel ?? 'шт.';
   const actualMealsCount = useMemo(() => {
     const entries = foodDay?.entries ?? [];
     return new Set(entries.map(entry => entry.meal)).size;
@@ -377,10 +388,11 @@ const TodayPage = () => {
     return sum + log.portionMl * log.portionsCount * factor;
   }, 0);
   const foodHydrationMl = (foodDay?.entries ?? []).reduce((sum, entry) => {
-    if (entry.kind === 'product' && entry.refId && entry.grams) {
+    if (entry.kind === 'product' && entry.refId) {
       const product = data.library.products.find(item => item.id === entry.refId);
       if (!product?.hydrationContribution) return sum;
-      return sum + entry.grams;
+      const grams = resolveProductGrams(product, entry.grams, entry.pieces);
+      return sum + grams;
     }
     if (entry.kind === 'dish' && entry.refId) {
       const recipe = data.library.recipes.find(item => item.id === entry.refId);
@@ -2600,10 +2612,16 @@ const TodayPage = () => {
               onChange={event =>
                 setFoodForm(prev => {
                   const refId = event.target.value;
-                  const tags =
-                    data.library.products.find(product => product.id === refId)?.nutritionTags ??
-                    [];
-                  return { ...prev, refId, nutritionTags: tags };
+                  const product = data.library.products.find(item => item.id === refId);
+                  const tags = product?.nutritionTags ?? [];
+                  const supportsPieces = Boolean(product?.pieceGrams);
+                  return {
+                    ...prev,
+                    refId,
+                    nutritionTags: tags,
+                    portionMode: supportsPieces ? 'pieces' : 'grams',
+                    pieces: supportsPieces ? prev.pieces || 1 : prev.pieces
+                  };
                 })
               }
             >
@@ -2614,37 +2632,84 @@ const TodayPage = () => {
                 </option>
               ))}
             </select>
-            <label className="text-sm font-semibold text-slate-600">Граммы</label>
-            <input
-              type="number"
-              className="input"
-              value={foodForm.grams}
-              onChange={event =>
-                setFoodForm(prev => ({ ...prev, grams: Number(event.target.value) }))
-              }
-            />
-            <div className="control-row">
-              {data.library.products
-                .find(product => product.id === foodForm.refId)
-                ?.portionPresets?.map(preset => (
-                  <button
-                    key={preset.label}
-                    className="btn-secondary"
-                    onClick={() => setFoodForm(prev => ({ ...prev, grams: preset.grams }))}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              {data.presets.portions.map(preset => (
+            {productSupportsPieces ? (
+              <div className="flex gap-2">
                 <button
-                  key={preset.label}
-                  className="btn-secondary"
-                  onClick={() => setFoodForm(prev => ({ ...prev, grams: preset.grams }))}
+                  className={foodForm.portionMode === 'pieces' ? 'btn-primary' : 'btn-secondary'}
+                  onClick={() => setFoodForm(prev => ({ ...prev, portionMode: 'pieces' }))}
                 >
-                  {preset.label}
+                  Штуки
                 </button>
-              ))}
-            </div>
+                <button
+                  className={foodForm.portionMode === 'grams' ? 'btn-primary' : 'btn-secondary'}
+                  onClick={() => setFoodForm(prev => ({ ...prev, portionMode: 'grams' }))}
+                >
+                  Граммы
+                </button>
+              </div>
+            ) : null}
+            {(!productSupportsPieces || foodForm.portionMode === 'grams') && (
+              <>
+                <label className="text-sm font-semibold text-slate-600">Граммы</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={foodForm.grams}
+                  onChange={event =>
+                    setFoodForm(prev => ({ ...prev, grams: Number(event.target.value) }))
+                  }
+                />
+                <div className="control-row">
+                  {data.library.products
+                    .find(product => product.id === foodForm.refId)
+                    ?.portionPresets?.map(preset => (
+                      <button
+                        key={preset.label}
+                        className="btn-secondary"
+                        onClick={() =>
+                          setFoodForm(prev => ({
+                            ...prev,
+                            grams: preset.grams,
+                            portionMode: 'grams'
+                          }))
+                        }
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  {data.presets.portions.map(preset => (
+                    <button
+                      key={preset.label}
+                      className="btn-secondary"
+                      onClick={() =>
+                        setFoodForm(prev => ({
+                          ...prev,
+                          grams: preset.grams,
+                          portionMode: 'grams'
+                        }))
+                      }
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            {productSupportsPieces && foodForm.portionMode === 'pieces' && (
+              <>
+                <label className="text-sm font-semibold text-slate-600">
+                  Количество ({productPieceLabel})
+                </label>
+                <input
+                  type="number"
+                  className="input"
+                  value={foodForm.pieces}
+                  onChange={event =>
+                    setFoodForm(prev => ({ ...prev, pieces: Number(event.target.value) }))
+                  }
+                />
+              </>
+            )}
           </>
         )}
 
@@ -2670,7 +2735,7 @@ const TodayPage = () => {
                 </option>
               ))}
             </select>
-            <label className="text-sm font-semibold text-slate-600">Порции</label>
+            <label className="text-sm font-semibold text-slate-600">Порции (для расчётов)</label>
             <input
               type="number"
               className="input"
@@ -2679,6 +2744,30 @@ const TodayPage = () => {
                 setFoodForm(prev => ({ ...prev, servings: Number(event.target.value) }))
               }
             />
+            <label className="text-sm font-semibold text-slate-600">Описание порции</label>
+            <input
+              className="input"
+              placeholder="Например: 1 тарелка"
+              value={foodForm.portionLabel}
+              onChange={event => setFoodForm(prev => ({ ...prev, portionLabel: event.target.value }))}
+            />
+            <div className="control-row">
+              {data.presets.dishPortions.map(preset => (
+                <button
+                  key={preset.label}
+                  className="btn-secondary"
+                  onClick={() =>
+                    setFoodForm(prev => ({
+                      ...prev,
+                      servings: preset.servings,
+                      portionLabel: preset.label
+                    }))
+                  }
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
           </>
         )}
 
@@ -2776,8 +2865,16 @@ const TodayPage = () => {
               id: '',
               kind: foodForm.kind,
               refId: foodForm.refId || undefined,
-              grams: foodForm.kind === 'product' ? foodForm.grams : undefined,
+              grams:
+                foodForm.kind === 'product' && foodForm.portionMode === 'grams'
+                  ? foodForm.grams
+                  : undefined,
+              pieces:
+                foodForm.kind === 'product' && foodForm.portionMode === 'pieces'
+                  ? foodForm.pieces
+                  : undefined,
               servings: foodForm.kind === 'dish' ? foodForm.servings : undefined,
+              portionLabel: foodForm.kind === 'dish' ? foodForm.portionLabel : undefined,
               meal: foodForm.meal,
               time: foodForm.time || undefined,
               title: foodForm.kind === 'free' || foodForm.kind === 'cheat' ? foodForm.title : undefined,

@@ -61,7 +61,10 @@ const LibraryPage = () => {
   const [foodForm, setFoodForm] = useState({
     meal: 'breakfast' as FoodEntry['meal'],
     grams: 120,
+    pieces: 1,
+    portionMode: 'grams' as 'grams' | 'pieces',
     servings: 1,
+    portionLabel: '',
     time: currentTimeString(),
     date: todayISO()
   });
@@ -79,7 +82,9 @@ const LibraryPage = () => {
     fatPer100g: 0,
     carbPer100g: 0,
     nutritionTags: [] as NutritionTag[],
-    hydrationContribution: false
+    hydrationContribution: false,
+    pieceGrams: 0,
+    pieceLabel: 'шт.'
   });
   const [newDrink, setNewDrink] = useState({
     name: '',
@@ -107,6 +112,25 @@ const LibraryPage = () => {
     perFlight: 0.05
   });
   const [taskDate, setTaskDate] = useState(todayISO());
+  const foodSheetProduct =
+    foodSheet?.kind === 'product'
+      ? data.library.products.find(product => product.id === foodSheet.refId)
+      : undefined;
+  const foodSheetSupportsPieces = Boolean(foodSheetProduct?.pieceGrams);
+  const foodSheetPieceLabel = foodSheetProduct?.pieceLabel ?? 'шт.';
+
+  useEffect(() => {
+    if (!foodSheet) return;
+    if (foodSheet.kind === 'product') {
+      const product = data.library.products.find(item => item.id === foodSheet.refId);
+      const supportsPieces = Boolean(product?.pieceGrams);
+      setFoodForm(prev => ({
+        ...prev,
+        portionMode: supportsPieces ? 'pieces' : 'grams',
+        pieces: supportsPieces ? prev.pieces || 1 : prev.pieces
+      }));
+    }
+  }, [data.library.products, foodSheet]);
 
   useEffect(() => {
     if (!detailItem || !('cues' in (detailItem as Exercise))) return;
@@ -151,7 +175,10 @@ const LibraryPage = () => {
     setFoodForm({
       meal: 'breakfast',
       grams: 120,
+      pieces: 1,
+      portionMode: 'grams',
       servings: 1,
+      portionLabel: '',
       time: currentTimeString(),
       date: todayISO()
     });
@@ -542,6 +569,12 @@ const LibraryPage = () => {
                 </div>
               </div>
             ) : null}
+            {(detailItem as any).pieceGrams ? (
+              <div>
+                <p className="text-xs font-semibold uppercase text-slate-400">Поштучно</p>
+                <span className="badge">{(detailItem as any).pieceLabel ?? 'шт.'}</span>
+              </div>
+            ) : null}
             {(detailItem as any).hydrationContribution ? (
               <div>
                 <p className="text-xs font-semibold uppercase text-slate-400">Водный баланс</p>
@@ -620,19 +653,54 @@ const LibraryPage = () => {
             />
             {foodSheet.kind === 'product' ? (
               <>
-                <label className="text-sm font-semibold text-slate-600">Граммы</label>
-                <input
-                  type="number"
-                  className="input"
-                  value={foodForm.grams}
-                  onChange={event =>
-                    setFoodForm(prev => ({ ...prev, grams: Number(event.target.value) }))
-                  }
-                />
+                {foodSheetSupportsPieces ? (
+                  <div className="flex gap-2">
+                    <button
+                      className={foodForm.portionMode === 'pieces' ? 'btn-primary' : 'btn-secondary'}
+                      onClick={() => setFoodForm(prev => ({ ...prev, portionMode: 'pieces' }))}
+                    >
+                      Штуки
+                    </button>
+                    <button
+                      className={foodForm.portionMode === 'grams' ? 'btn-primary' : 'btn-secondary'}
+                      onClick={() => setFoodForm(prev => ({ ...prev, portionMode: 'grams' }))}
+                    >
+                      Граммы
+                    </button>
+                  </div>
+                ) : null}
+                {(!foodSheetSupportsPieces || foodForm.portionMode === 'grams') && (
+                  <>
+                    <label className="text-sm font-semibold text-slate-600">Граммы</label>
+                    <input
+                      type="number"
+                      className="input"
+                      value={foodForm.grams}
+                      onChange={event =>
+                        setFoodForm(prev => ({ ...prev, grams: Number(event.target.value) }))
+                      }
+                    />
+                  </>
+                )}
+                {foodSheetSupportsPieces && foodForm.portionMode === 'pieces' && (
+                  <>
+                    <label className="text-sm font-semibold text-slate-600">
+                      Количество ({foodSheetPieceLabel})
+                    </label>
+                    <input
+                      type="number"
+                      className="input"
+                      value={foodForm.pieces}
+                      onChange={event =>
+                        setFoodForm(prev => ({ ...prev, pieces: Number(event.target.value) }))
+                      }
+                    />
+                  </>
+                )}
               </>
             ) : (
               <>
-                <label className="text-sm font-semibold text-slate-600">Порции</label>
+                <label className="text-sm font-semibold text-slate-600">Порции (для расчётов)</label>
                 <input
                   type="number"
                   className="input"
@@ -641,6 +709,32 @@ const LibraryPage = () => {
                     setFoodForm(prev => ({ ...prev, servings: Number(event.target.value) }))
                   }
                 />
+                <label className="text-sm font-semibold text-slate-600">Описание порции</label>
+                <input
+                  className="input"
+                  placeholder="Например: 1 тарелка"
+                  value={foodForm.portionLabel}
+                  onChange={event =>
+                    setFoodForm(prev => ({ ...prev, portionLabel: event.target.value }))
+                  }
+                />
+                <div className="control-row">
+                  {data.presets.dishPortions.map(preset => (
+                    <button
+                      key={preset.label}
+                      className="btn-secondary"
+                      onClick={() =>
+                        setFoodForm(prev => ({
+                          ...prev,
+                          servings: preset.servings,
+                          portionLabel: preset.label
+                        }))
+                      }
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
               </>
             )}
             <button
@@ -662,8 +756,16 @@ const LibraryPage = () => {
                   id: '',
                   kind: foodSheet.kind,
                   refId: foodSheet.refId,
-                  grams: foodSheet.kind === 'product' ? foodForm.grams : undefined,
+                  grams:
+                    foodSheet.kind === 'product' && foodForm.portionMode === 'grams'
+                      ? foodForm.grams
+                      : undefined,
+                  pieces:
+                    foodSheet.kind === 'product' && foodForm.portionMode === 'pieces'
+                      ? foodForm.pieces
+                      : undefined,
                   servings: foodSheet.kind === 'dish' ? foodForm.servings : undefined,
+                  portionLabel: foodSheet.kind === 'dish' ? foodForm.portionLabel : undefined,
                   meal: foodForm.meal,
                   time: foodForm.time || undefined,
                   nutritionTags: resolvedTags
@@ -857,6 +959,25 @@ const LibraryPage = () => {
                 setNewProduct(prev => ({ ...prev, carbPer100g: Number(event.target.value) }))
               }
             />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                className="input"
+                type="number"
+                placeholder="Грамм в 1 шт (служебно)"
+                value={newProduct.pieceGrams}
+                onChange={event =>
+                  setNewProduct(prev => ({ ...prev, pieceGrams: Number(event.target.value) }))
+                }
+              />
+              <input
+                className="input"
+                placeholder="Подпись (шт.)"
+                value={newProduct.pieceLabel}
+                onChange={event =>
+                  setNewProduct(prev => ({ ...prev, pieceLabel: event.target.value }))
+                }
+              />
+            </div>
             <div className="space-y-2">
               <p className="text-sm font-semibold text-slate-600">Метки питания</p>
               <div className="flex flex-wrap gap-2 text-xs text-slate-600">
@@ -900,7 +1021,11 @@ const LibraryPage = () => {
                     fatPer100g: newProduct.fatPer100g || undefined,
                     carbPer100g: newProduct.carbPer100g || undefined,
                     nutritionTags: newProduct.nutritionTags,
-                    hydrationContribution: newProduct.hydrationContribution
+                    hydrationContribution: newProduct.hydrationContribution,
+                    pieceGrams: newProduct.pieceGrams || undefined,
+                    pieceLabel: newProduct.pieceGrams
+                      ? newProduct.pieceLabel || 'шт.'
+                      : undefined
                   });
                   return { ...state };
                 });
@@ -911,7 +1036,9 @@ const LibraryPage = () => {
                   fatPer100g: 0,
                   carbPer100g: 0,
                   nutritionTags: [],
-                  hydrationContribution: false
+                  hydrationContribution: false,
+                  pieceGrams: 0,
+                  pieceLabel: 'шт.'
                 });
                 setCreateSheet(null);
               }}

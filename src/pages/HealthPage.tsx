@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../store/useAppStore';
 import { combineDateTime, currentTimeString, todayISO } from '../utils/date';
+import { resolveProductGrams } from '../utils/nutrition';
 import type { SmokingLog, SleepLog, WaistLog, WeightLog } from '../types';
 
 const HealthPage = () => {
@@ -74,10 +75,11 @@ const HealthPage = () => {
   }, 0);
   const foodDay = data.logs.foodDays.find(day => day.date === selectedDate);
   const foodHydrationMl = (foodDay?.entries ?? []).reduce((sum, entry) => {
-    if (entry.kind === 'product' && entry.refId && entry.grams) {
+    if (entry.kind === 'product' && entry.refId) {
       const product = data.library.products.find(item => item.id === entry.refId);
       if (!product?.hydrationContribution) return sum;
-      return sum + entry.grams;
+      const grams = resolveProductGrams(product, entry.grams, entry.pieces);
+      return sum + grams;
     }
     if (entry.kind === 'dish' && entry.refId) {
       const recipe = data.library.recipes.find(item => item.id === entry.refId);
