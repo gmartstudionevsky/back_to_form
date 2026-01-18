@@ -38,7 +38,7 @@ body {
 }
 
 .input-time {
-  @apply min-h-[36px] px-2.5 py-1.5 text-sm;
+  @apply min-h-[36px] w-full min-w-0 px-2.5 py-1.5 text-sm;
 }
 
 .badge {

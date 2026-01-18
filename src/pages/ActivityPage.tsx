@@ -1,17 +1,45 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../store/useAppStore';
-import { todayISO } from '../utils/date';
+import { combineDateTime, currentTimeString, todayISO } from '../utils/date';
 import {
   calcMovementActivityMetrics,
   calcStepsCoefficient,
   calcTrainingActivityMetrics,
   resolveActivityDefaults
 } from '../utils/activity';
+import type { ActivityLog, MovementSessionLog } from '../types';
 
 const ActivityPage = () => {
-  const { data } = useAppStore();
+  const {
+    data,
+    addTrainingLog,
+    updateTrainingLog,
+    deleteTrainingLog,
+    addMovementSessionLog,
+    updateMovementSessionLog,
+    deleteMovementSessionLog,
+    setMovementDayLog,
+    deleteMovementDayLog
+  } = useAppStore();
   const [selectedDate, setSelectedDate] = useState(todayISO());
+  const [trainingForm, setTrainingForm] = useState({
+    id: '',
+    minutes: '',
+    time: currentTimeString(),
+    protocolRef: ''
+  });
+  const [editingTraining, setEditingTraining] = useState<ActivityLog | null>(null);
+  const [movementForm, setMovementForm] = useState({
+    id: '',
+    activityRef: '',
+    durationMinutes: '',
+    distanceKm: '',
+    steps: '',
+    time: currentTimeString()
+  });
+  const [editingMovement, setEditingMovement] = useState<MovementSessionLog | null>(null);
+  const [stepsInput, setStepsInput] = useState('');
 
   const trainingLogs = data.logs.training.filter(log => log.dateTime.slice(0, 10) === selectedDate);
   const movementSessions = data.logs.movementSessions.filter(
@@ -75,16 +103,12 @@ const ActivityPage = () => {
   const stepsScore = calcStepsCoefficient(steps, activityDefaults);
 
   const weeklyDates = useMemo(() => {
-    const base = new Date(todayISO());
-    const options = Array.from({ length: 10 }, (_, index) => {
+    const base = new Date(selectedDate);
+    return Array.from({ length: 7 }, (_, index) => {
       const date = new Date(base);
       date.setDate(base.getDate() - index);
       return date.toISOString().slice(0, 10);
     });
-    if (!options.includes(selectedDate)) {
-      options.unshift(selectedDate);
-    }
-    return options;
   }, [selectedDate]);
 
   const weeklyMovement = useMemo(() => {
@@ -113,6 +137,112 @@ const ActivityPage = () => {
   const formatDayLabel = (iso: string) =>
     new Date(iso).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' });
 
+  useEffect(() => {
+    if (!trainingForm.protocolRef && data.library.protocols[0]) {
+      setTrainingForm(prev => ({ ...prev, protocolRef: data.library.protocols[0].id }));
+    }
+    if (!movementForm.activityRef && data.library.movementActivities[0]) {
+      setMovementForm(prev => ({ ...prev, activityRef: data.library.movementActivities[0].id }));
+    }
+  }, [data.library.movementActivities, data.library.protocols, movementForm.activityRef, trainingForm.protocolRef]);
+
+  useEffect(() => {
+    setStepsInput(movementDay?.steps?.toString() ?? '');
+  }, [movementDay?.steps, selectedDate]);
+
+  const startTrainingEdit = (log: ActivityLog) => {
+    setEditingTraining(log);
+    setTrainingForm({
+      id: log.id,
+      minutes: String(log.minutes),
+      time: new Date(log.dateTime).toLocaleTimeString('ru-RU', {
+        hour: '2-digit',
+        minute: '2-digit'
+      }),
+      protocolRef: log.protocolRef ?? ''
+    });
+  };
+
+  const resetTrainingForm = () => {
+    setEditingTraining(null);
+    setTrainingForm({
+      id: '',
+      minutes: '',
+      time: currentTimeString(),
+      protocolRef: data.library.protocols[0]?.id ?? ''
+    });
+  };
+
+  const saveTrainingLog = () => {
+    const minutes = Number(trainingForm.minutes);
+    if (!Number.isFinite(minutes) || minutes <= 0) return;
+    const log = {
+      id: editingTraining?.id ?? crypto.randomUUID(),
+      dateTime: combineDateTime(selectedDate, trainingForm.time),
+      type: 'workout' as const,
+      minutes,
+      protocolRef: trainingForm.protocolRef || undefined
+    };
+    if (editingTraining) {
+      updateTrainingLog(log);
+    } else {
+      addTrainingLog(log);
+    }
+    resetTrainingForm();
+  };
+
+  const startMovementEdit = (log: MovementSessionLog) => {
+    setEditingMovement(log);
+    setMovementForm({
+      id: log.id,
+      activityRef: log.activityRef,
+      durationMinutes: String(log.durationMinutes),
+      distanceKm: log.distanceKm?.toString() ?? '',
+      steps: log.steps?.toString() ?? '',
+      time: new Date(log.dateTime).toLocaleTimeString('ru-RU', {
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    });
+  };
+
+  const resetMovementForm = () => {
+    setEditingMovement(null);
+    setMovementForm({
+      id: '',
+      activityRef: data.library.movementActivities[0]?.id ?? '',
+      durationMinutes: '',
+      distanceKm: '',
+      steps: '',
+      time: currentTimeString()
+    });
+  };
+
+  const saveMovementLog = () => {
+    const durationMinutes = Number(movementForm.durationMinutes);
+    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) return;
+    const log = {
+      id: editingMovement?.id ?? crypto.randomUUID(),
+      dateTime: combineDateTime(selectedDate, movementForm.time),
+      activityRef: movementForm.activityRef,
+      durationMinutes,
+      distanceKm: movementForm.distanceKm ? Number(movementForm.distanceKm) : undefined,
+      steps: movementForm.steps ? Number(movementForm.steps) : undefined
+    };
+    if (editingMovement) {
+      updateMovementSessionLog(log);
+    } else {
+      addMovementSessionLog(log);
+    }
+    resetMovementForm();
+  };
+
+  const saveSteps = () => {
+    const stepsValue = Number(stepsInput);
+    if (!Number.isFinite(stepsValue)) return;
+    setMovementDayLog({ date: selectedDate, steps: stepsValue });
+  };
+
   return (
     <section className="space-y-4">
       <header className="space-y-2">
@@ -120,27 +250,18 @@ const ActivityPage = () => {
         <p className="text-sm text-slate-500">
           Статистический хаб по движению: тренды нагрузок, паттерны активности и прогресс.
         </p>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap gap-2">
-            {weeklyDates.map(date => (
-              <button
-                key={date}
-                className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                  selectedDate === date ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'
-                }`}
-                onClick={() => setSelectedDate(date)}
-              >
-                {formatDayLabel(date)}
-              </button>
-            ))}
-          </div>
-          <Link className="btn-secondary w-full sm:w-auto" to="/">
-            Внести факты за сегодня
-          </Link>
-        </div>
       </header>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-slate-500">
+          Сводка показывает активность за выбранную дату и недельные тренды.
+        </p>
+        <Link className="btn-secondary w-full sm:w-auto" to="/">
+          Внести факты за сегодня
+        </Link>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div className="card p-4 space-y-2">
           <p className="text-xs font-semibold uppercase text-slate-400">Тренировки</p>
           <p className="text-2xl font-semibold">{trainingStats.count}</p>
@@ -162,6 +283,37 @@ const ActivityPage = () => {
         </div>
       </div>
 
+      <div className="card p-4 space-y-3">
+        <h2 className="section-title">Последняя неделя</h2>
+        <div className="flex flex-wrap gap-2">
+          {weeklyDates.map(date => (
+            <button
+              key={date}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                selectedDate === date ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'
+              }`}
+              onClick={() => setSelectedDate(date)}
+            >
+              {formatDayLabel(date)}
+            </button>
+          ))}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+          <label className="text-xs text-slate-500">
+            Выберите дату
+            <input
+              className="input mt-1"
+              type="date"
+              value={selectedDate}
+              onChange={event => setSelectedDate(event.target.value)}
+            />
+          </label>
+          <div className="text-xs text-slate-400 sm:text-right">
+            Покрытие активности: {weeklyMovement.coverage}%
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="card p-4 space-y-3">
           <h2 className="section-title">Тренировки дня</h2>
@@ -172,16 +324,29 @@ const ActivityPage = () => {
                   ? data.library.protocols.find(item => item.id === log.protocolRef)
                   : undefined;
                 return (
-                  <div key={log.id} className="rounded-xl border border-slate-200 p-3">
-                    <p className="text-sm font-semibold">
-                      {protocol?.name ?? 'Тренировка'} · {log.minutes} мин
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {new Date(log.dateTime).toLocaleTimeString('ru-RU', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </p>
+                  <div
+                    key={log.id}
+                    className="flex flex-col gap-2 rounded-xl border border-slate-200 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div>
+                      <p className="font-semibold">
+                        {protocol?.name ?? 'Тренировка'} · {log.minutes} мин
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {new Date(log.dateTime).toLocaleTimeString('ru-RU', {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                      <button className="btn-secondary" onClick={() => startTrainingEdit(log)}>
+                        Редактировать
+                      </button>
+                      <button className="btn-secondary" onClick={() => deleteTrainingLog(log.id)}>
+                        Удалить
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -189,6 +354,59 @@ const ActivityPage = () => {
           ) : (
             <p className="text-sm text-slate-500">Нет записанных тренировок.</p>
           )}
+          <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+            <h3 className="text-sm font-semibold">
+              {editingTraining ? 'Редактировать тренировку' : 'Добавить тренировку'}
+            </h3>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="text-xs text-slate-500">
+                Протокол
+                <select
+                  className="input mt-1"
+                  value={trainingForm.protocolRef}
+                  onChange={event =>
+                    setTrainingForm(prev => ({ ...prev, protocolRef: event.target.value }))
+                  }
+                >
+                  {data.library.protocols.map(protocol => (
+                    <option key={protocol.id} value={protocol.id}>
+                      {protocol.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs text-slate-500">
+                Время
+                <input
+                  className="input input-time mt-1"
+                  type="time"
+                  value={trainingForm.time}
+                  onChange={event => setTrainingForm(prev => ({ ...prev, time: event.target.value }))}
+                />
+              </label>
+              <label className="text-xs text-slate-500 sm:col-span-2">
+                Минуты
+                <input
+                  className="input mt-1"
+                  type="number"
+                  value={trainingForm.minutes}
+                  onChange={event =>
+                    setTrainingForm(prev => ({ ...prev, minutes: event.target.value }))
+                  }
+                />
+              </label>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button className="btn-primary w-full" onClick={saveTrainingLog}>
+                {editingTraining ? 'Сохранить' : 'Добавить'}
+              </button>
+              {editingTraining ? (
+                <button className="btn-secondary w-full" onClick={resetTrainingForm}>
+                  Отмена
+                </button>
+              ) : null}
+            </div>
+          </div>
         </div>
 
         <div className="space-y-3">
@@ -221,13 +439,26 @@ const ActivityPage = () => {
                     item => item.id === log.activityRef
                   );
                   return (
-                    <div key={log.id} className="rounded-xl border border-slate-200 p-3">
-                      <p className="text-sm font-semibold">
-                        {activity?.name ?? 'Активность'} · {log.durationMinutes} мин
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        Шаги: {log.steps ?? 0} · {log.distanceKm ?? 0} км
-                      </p>
+                    <div
+                      key={log.id}
+                      className="flex flex-col gap-2 rounded-xl border border-slate-200 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <p className="font-semibold">
+                          {activity?.name ?? 'Активность'} · {log.durationMinutes} мин
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          Шаги: {log.steps ?? 0} · {log.distanceKm ?? 0} км
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                        <button className="btn-secondary" onClick={() => startMovementEdit(log)}>
+                          Редактировать
+                        </button>
+                        <button className="btn-secondary" onClick={() => deleteMovementSessionLog(log.id)}>
+                          Удалить
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -235,6 +466,96 @@ const ActivityPage = () => {
             ) : (
               <p className="text-sm text-slate-500">Нет записей о движении.</p>
             )}
+            <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+              <h3 className="text-sm font-semibold">
+                {editingMovement ? 'Редактировать активность' : 'Добавить активность'}
+              </h3>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="text-xs text-slate-500">
+                  Активность
+                  <select
+                    className="input mt-1"
+                    value={movementForm.activityRef}
+                    onChange={event =>
+                      setMovementForm(prev => ({ ...prev, activityRef: event.target.value }))
+                    }
+                  >
+                    {data.library.movementActivities.map(activity => (
+                      <option key={activity.id} value={activity.id}>
+                        {activity.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs text-slate-500">
+                  Время
+                  <input
+                    className="input input-time mt-1"
+                    type="time"
+                    value={movementForm.time}
+                    onChange={event => setMovementForm(prev => ({ ...prev, time: event.target.value }))}
+                  />
+                </label>
+                <input
+                  className="input"
+                  type="number"
+                  placeholder="Минуты"
+                  value={movementForm.durationMinutes}
+                  onChange={event =>
+                    setMovementForm(prev => ({ ...prev, durationMinutes: event.target.value }))
+                  }
+                />
+                <input
+                  className="input"
+                  type="number"
+                  placeholder="Дистанция (км)"
+                  value={movementForm.distanceKm}
+                  onChange={event =>
+                    setMovementForm(prev => ({ ...prev, distanceKm: event.target.value }))
+                  }
+                />
+                <input
+                  className="input"
+                  type="number"
+                  placeholder="Шаги"
+                  value={movementForm.steps}
+                  onChange={event => setMovementForm(prev => ({ ...prev, steps: event.target.value }))}
+                />
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button className="btn-primary w-full" onClick={saveMovementLog}>
+                  {editingMovement ? 'Сохранить' : 'Добавить'}
+                </button>
+                {editingMovement ? (
+                  <button className="btn-secondary w-full" onClick={resetMovementForm}>
+                    Отмена
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+              <h3 className="text-sm font-semibold">Шаги за день</h3>
+              <input
+                className="input"
+                type="number"
+                placeholder="Количество шагов"
+                value={stepsInput}
+                onChange={event => setStepsInput(event.target.value)}
+              />
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button className="btn-primary w-full" onClick={saveSteps}>
+                  Сохранить шаги
+                </button>
+                {movementDay ? (
+                  <button
+                    className="btn-secondary w-full"
+                    onClick={() => deleteMovementDayLog(selectedDate)}
+                  >
+                    Удалить запись
+                  </button>
+                ) : null}
+              </div>
+            </div>
           </div>
         </div>
       </div>

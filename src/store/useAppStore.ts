@@ -33,6 +33,7 @@ type AppState = {
   updateMovementSessionLog: (log: MovementSessionLog) => void;
   deleteMovementSessionLog: (id: string) => void;
   setMovementDayLog: (log: MovementDayLog) => void;
+  deleteMovementDayLog: (date: string) => void;
   addSmokingLog: (log: SmokingLog) => void;
   updateSmokingLog: (log: SmokingLog) => void;
   deleteSmokingLog: (id: string) => void;
@@ -148,6 +149,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       } else {
         data.logs.movementDays.push(log);
       }
+      return { ...data };
+    });
+  },
+  deleteMovementDayLog: date => {
+    get().updateData(data => {
+      data.logs.movementDays = data.logs.movementDays.filter(item => item.date !== date);
       return { ...data };
     });
   },

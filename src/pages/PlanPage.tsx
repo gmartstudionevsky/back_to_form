@@ -297,6 +297,22 @@ const PlanPage = () => {
     setSelectedPeriod(prev => (prev ? { ...prev, ...patch } : prev));
   };
 
+  const deleteSelectedPeriod = () => {
+    if (!selectedPeriod) return;
+    if (!window.confirm(`Удалить период «${selectedPeriod.name}»?`)) return;
+    const remaining = data.planner.periods.filter(period => period.id !== selectedPeriod.id);
+    updateData(state => {
+      state.planner.periods = state.planner.periods.filter(
+        period => period.id !== selectedPeriod.id
+      );
+      state.planner.dayPlans = state.planner.dayPlans.map(plan =>
+        plan.periodId === selectedPeriod.id ? { ...plan, periodId: undefined } : plan
+      );
+      return { ...state };
+    });
+    setSelectedPeriod(remaining[0] ?? null);
+  };
+
   const addGoalToPeriod = () => {
     if (!selectedPeriod || !periodGoalInput.trim()) return;
     const nextGoals = Array.from(new Set([...selectedPeriod.goals, periodGoalInput.trim()]));
@@ -1520,6 +1536,15 @@ const PlanPage = () => {
                   </button>
                   <button className="btn-primary w-full" onClick={autoPlanPeriod}>
                     Автосоставить план
+                  </button>
+                </div>
+                <div className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm text-rose-700">
+                  <p className="font-semibold">Удаление периода</p>
+                  <p className="text-xs text-rose-600">
+                    Период будет удалён, а дни останутся без привязки.
+                  </p>
+                  <button className="btn-secondary mt-3 w-full" onClick={deleteSelectedPeriod}>
+                    Удалить период
                   </button>
                 </div>
               </div>
