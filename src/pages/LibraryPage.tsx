@@ -4,7 +4,7 @@ import { useAppStore } from '../store/useAppStore';
 import { currentTimeString, todayISO } from '../utils/date';
 import { calcRecipeNutrition } from '../utils/nutrition';
 import { savePhotoBlob } from '../storage/photoDb';
-import { Exercise, FoodEntry, Recipe, TaskTemplate, MovementActivity } from '../types';
+import { Exercise, FoodEntry, NutritionTag, Recipe, TaskTemplate, MovementActivity } from '../types';
 
 const tabs = [
   'Упражнения',
@@ -28,6 +28,12 @@ const mealLabels: Record<FoodEntry['meal'], string> = {
   lunch: 'Обед',
   dinner: 'Ужин',
   snack: 'Перекус'
+};
+
+const nutritionTagLabels: Record<NutritionTag, string> = {
+  snack: 'Перекус',
+  cheat: 'Читмил',
+  healthy: 'Правильное питание'
 };
 
 const LibraryPage = () => {
@@ -55,14 +61,16 @@ const LibraryPage = () => {
   const [newDish, setNewDish] = useState({
     name: '',
     servings: 1,
-    category: 'main' as Recipe['category']
+    category: 'main' as Recipe['category'],
+    nutritionTags: [] as NutritionTag[]
   });
   const [newProduct, setNewProduct] = useState({
     name: '',
     kcalPer100g: 0,
     proteinPer100g: 0,
     fatPer100g: 0,
-    carbPer100g: 0
+    carbPer100g: 0,
+    nutritionTags: [] as NutritionTag[]
   });
   const [newExercise, setNewExercise] = useState({
     name: '',
@@ -141,6 +149,24 @@ const LibraryPage = () => {
     if ('title' in (detailItem as Record<string, string>)) return (detailItem as any).title;
     if ('name' in (detailItem as Record<string, string>)) return (detailItem as any).name;
     return 'Детали';
+  };
+
+  const toggleNewDishTag = (tag: NutritionTag) => {
+    setNewDish(prev => ({
+      ...prev,
+      nutritionTags: prev.nutritionTags.includes(tag)
+        ? prev.nutritionTags.filter(item => item !== tag)
+        : [...prev.nutritionTags, tag]
+    }));
+  };
+
+  const toggleNewProductTag = (tag: NutritionTag) => {
+    setNewProduct(prev => ({
+      ...prev,
+      nutritionTags: prev.nutritionTags.includes(tag)
+        ? prev.nutritionTags.filter(item => item !== tag)
+        : [...prev.nutritionTags, tag]
+    }));
   };
 
   return (
@@ -385,15 +411,39 @@ const LibraryPage = () => {
                 })()}
               </p>
             </div>
+            {(detailItem as Recipe).nutritionTags?.length ? (
+              <div>
+                <p className="text-xs font-semibold uppercase text-slate-400">Метки питания</p>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                  {(detailItem as Recipe).nutritionTags?.map(tag => (
+                    <span key={tag} className="badge">
+                      {nutritionTagLabels[tag]}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
         {detailItem && 'kcalPer100g' in (detailItem as any) ? (
           <div className="space-y-2 text-sm text-slate-600">
             <p>Калории: {(detailItem as any).kcalPer100g} ккал/100г</p>
+            {(detailItem as any).nutritionTags?.length ? (
+              <div>
+                <p className="text-xs font-semibold uppercase text-slate-400">Метки питания</p>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                  {(detailItem as any).nutritionTags.map((tag: NutritionTag) => (
+                    <span key={tag} className="badge">
+                      {nutritionTagLabels[tag]}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {((detailItem as any).portionPresets ?? []).length > 0 ? (
               <div>
-              <p className="text-xs font-semibold uppercase text-slate-400">Шаблоны</p>
+                <p className="text-xs font-semibold uppercase text-slate-400">Шаблоны</p>
                 <div className="control-row mt-2">
                   {(detailItem as any).portionPresets.map((preset: any) => (
                     <span key={preset.label} className="badge">
@@ -481,6 +531,17 @@ const LibraryPage = () => {
               className="btn-primary w-full"
               onClick={() => {
                 if (!foodForm.date) return;
+                const tags =
+                  foodSheet.kind === 'product'
+                    ? data.library.products.find(item => item.id === foodSheet.refId)?.nutritionTags ??
+                      []
+                    : data.library.recipes.find(item => item.id === foodSheet.refId)?.nutritionTags ??
+                      [];
+                const resolvedTags = Array.from(
+                  new Set(
+                    [...tags, foodForm.meal === 'snack' ? 'snack' : undefined].filter(Boolean)
+                  ) as NutritionTag[]
+                );
                 addFoodEntry(foodForm.date, {
                   id: '',
                   kind: foodSheet.kind,
@@ -488,7 +549,8 @@ const LibraryPage = () => {
                   grams: foodSheet.kind === 'product' ? foodForm.grams : undefined,
                   servings: foodSheet.kind === 'dish' ? foodForm.servings : undefined,
                   meal: foodForm.meal,
-                  time: foodForm.time || undefined
+                  time: foodForm.time || undefined,
+                  nutritionTags: resolvedTags
                 });
                 setFoodSheet(null);
               }}
@@ -572,6 +634,22 @@ const LibraryPage = () => {
               <option value="drink">Напиток</option>
               <option value="cheat">Читмил</option>
             </select>
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-slate-600">Метки питания</p>
+              <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+                {(Object.keys(nutritionTagLabels) as NutritionTag[]).map(tag => (
+                  <label key={tag} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={newDish.nutritionTags.includes(tag)}
+                      onChange={() => toggleNewDishTag(tag)}
+                    />
+                    {nutritionTagLabels[tag]}
+                  </label>
+                ))}
+              </div>
+            </div>
             <button
               className="btn-primary w-full"
               onClick={() => {
@@ -584,11 +662,12 @@ const LibraryPage = () => {
                     ingredients: [],
                     steps: [],
                     tags: [],
-                    category: newDish.category
+                    category: newDish.category,
+                    nutritionTags: newDish.nutritionTags
                   });
                   return { ...state };
                 });
-                setNewDish({ name: '', servings: 1, category: 'main' });
+                setNewDish({ name: '', servings: 1, category: 'main', nutritionTags: [] });
                 setCreateSheet(null);
               }}
             >
@@ -643,6 +722,22 @@ const LibraryPage = () => {
                 setNewProduct(prev => ({ ...prev, carbPer100g: Number(event.target.value) }))
               }
             />
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-slate-600">Метки питания</p>
+              <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+                {(Object.keys(nutritionTagLabels) as NutritionTag[]).map(tag => (
+                  <label key={tag} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={newProduct.nutritionTags.includes(tag)}
+                      onChange={() => toggleNewProductTag(tag)}
+                    />
+                    {nutritionTagLabels[tag]}
+                  </label>
+                ))}
+              </div>
+            </div>
             <button
               className="btn-primary w-full"
               onClick={() => {
@@ -654,7 +749,8 @@ const LibraryPage = () => {
                     kcalPer100g: newProduct.kcalPer100g,
                     proteinPer100g: newProduct.proteinPer100g || undefined,
                     fatPer100g: newProduct.fatPer100g || undefined,
-                    carbPer100g: newProduct.carbPer100g || undefined
+                    carbPer100g: newProduct.carbPer100g || undefined,
+                    nutritionTags: newProduct.nutritionTags
                   });
                   return { ...state };
                 });
@@ -663,7 +759,8 @@ const LibraryPage = () => {
                   kcalPer100g: 0,
                   proteinPer100g: 0,
                   fatPer100g: 0,
-                  carbPer100g: 0
+                  carbPer100g: 0,
+                  nutritionTags: []
                 });
                 setCreateSheet(null);
               }}

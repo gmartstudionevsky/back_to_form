@@ -1,8 +1,15 @@
 import { useMemo, useState } from 'react';
 import { BottomSheet } from '../components/BottomSheet';
 import { useAppStore } from '../store/useAppStore';
-import { FoodEntry, MealPlanItem, Period, WorkoutPlanItem } from '../types';
-import { calcRecipeNutrition } from '../utils/nutrition';
+import {
+  FoodEntry,
+  MealPlanItem,
+  NutritionTag,
+  NutritionTargets,
+  Period,
+  WorkoutPlanItem
+} from '../types';
+import { calcMealPlanItem } from '../utils/nutrition';
 import {
   getDefaultMealTime,
   getDefaultTimeForTimeOfDay,
@@ -22,6 +29,11 @@ type MealDraft = {
   grams: number;
   servings: number;
   cheatCategory: MealPlanItem['cheatCategory'];
+  nutritionTags: NutritionTag[];
+  plannedKcal: string;
+  plannedProtein: string;
+  plannedFat: string;
+  plannedCarb: string;
 };
 
 type WorkoutDraft = {
@@ -39,6 +51,12 @@ const mealLabels: Record<FoodEntry['meal'], string> = {
   lunch: 'Обед',
   dinner: 'Ужин',
   snack: 'Перекус'
+};
+
+const nutritionTagLabels: Record<NutritionTag, string> = {
+  snack: 'Перекус',
+  cheat: 'Читмил',
+  healthy: 'Правильное питание'
 };
 
 const PlanPage = () => {
@@ -104,24 +122,25 @@ const PlanPage = () => {
     dinner: '',
     snack: ''
   };
+  const nutritionTargets = dayPlan?.nutritionTargets ?? {};
 
-  const plannedKcal = (planDate: string) => {
+  const plannedNutrition = (planDate: string) => {
     const plan = data.planner.dayPlans.find(item => item.date === planDate);
-    if (!plan?.mealsPlan) return 0;
-    return Object.values(plan.mealsPlan).flat().reduce((sum, item) => {
-      if (item.kind === 'product' && item.refId && item.plannedGrams) {
-        const product = data.library.products.find(prod => prod.id === item.refId);
-        if (!product) return sum;
-        return sum + (product.kcalPer100g * item.plannedGrams) / 100;
-      }
-      if (item.kind === 'dish' && item.refId) {
-        const dish = data.library.recipes.find(rec => rec.id === item.refId);
-        if (!dish) return sum;
-        const nutrition = calcRecipeNutrition(dish, data.library);
-        return sum + nutrition.perServing.kcal * (item.plannedServings ?? 1);
-      }
-      return sum;
-    }, 0);
+    if (!plan?.mealsPlan) return { kcal: 0, protein: 0, fat: 0, carb: 0 };
+    return Object.values(plan.mealsPlan)
+      .flat()
+      .reduce(
+        (sum, item) => {
+          const nutrition = calcMealPlanItem(item, data.library);
+          return {
+            kcal: sum.kcal + nutrition.kcal,
+            protein: sum.protein + nutrition.protein,
+            fat: sum.fat + nutrition.fat,
+            carb: sum.carb + nutrition.carb
+          };
+        },
+        { kcal: 0, protein: 0, fat: 0, carb: 0 }
+      );
   };
 
   const addMealToPlan = () => {
@@ -129,6 +148,28 @@ const PlanPage = () => {
     updateData(state => {
       const plan = state.planner.dayPlans.find(item => item.date === editorDate);
       if (!plan) return { ...state };
+      const resolveTags = () => {
+        const tags = mealSheet.nutritionTags.length ? [...mealSheet.nutritionTags] : [];
+        if (mealSheet.kind === 'product' && mealSheet.refId) {
+          const product = state.library.products.find(item => item.id === mealSheet.refId);
+          if (product?.nutritionTags?.length) {
+            tags.push(...product.nutritionTags);
+          }
+        }
+        if (mealSheet.kind === 'dish' && mealSheet.refId) {
+          const recipe = state.library.recipes.find(item => item.id === mealSheet.refId);
+          if (recipe?.nutritionTags?.length) {
+            tags.push(...recipe.nutritionTags);
+          }
+        }
+        if (mealSheet.kind === 'cheat') {
+          tags.push('cheat');
+        }
+        if (mealSheet.meal === 'snack') {
+          tags.push('snack');
+        }
+        return Array.from(new Set(tags));
+      };
       const entry: MealPlanItem = {
         id: crypto.randomUUID(),
         kind: mealSheet.kind,
@@ -137,7 +178,24 @@ const PlanPage = () => {
         plannedGrams: mealSheet.kind === 'product' ? mealSheet.grams : undefined,
         plannedServings: mealSheet.kind === 'dish' ? mealSheet.servings : undefined,
         title: mealSheet.kind === 'free' || mealSheet.kind === 'cheat' ? mealSheet.title : undefined,
-        cheatCategory: mealSheet.kind === 'cheat' ? mealSheet.cheatCategory : undefined
+        plannedKcal:
+          mealSheet.kind === 'free' || mealSheet.kind === 'cheat'
+            ? Number(mealSheet.plannedKcal) || undefined
+            : undefined,
+        plannedProtein:
+          mealSheet.kind === 'free' || mealSheet.kind === 'cheat'
+            ? Number(mealSheet.plannedProtein) || undefined
+            : undefined,
+        plannedFat:
+          mealSheet.kind === 'free' || mealSheet.kind === 'cheat'
+            ? Number(mealSheet.plannedFat) || undefined
+            : undefined,
+        plannedCarb:
+          mealSheet.kind === 'free' || mealSheet.kind === 'cheat'
+            ? Number(mealSheet.plannedCarb) || undefined
+            : undefined,
+        cheatCategory: mealSheet.kind === 'cheat' ? mealSheet.cheatCategory : undefined,
+        nutritionTags: resolveTags()
       };
       plan.mealsPlan[mealSheet.meal].push(entry);
       return { ...state };
@@ -187,6 +245,17 @@ const PlanPage = () => {
     });
   };
 
+  const updateNutritionTarget = (field: keyof NutritionTargets, value: number | undefined) => {
+    if (!editorDate) return;
+    updateData(state => {
+      const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+      if (!plan) return { ...state };
+      plan.nutritionTargets ??= {};
+      plan.nutritionTargets[field] = value;
+      return { ...state };
+    });
+  };
+
   const updateWorkoutTime = (id: string, time: string) => {
     if (!editorDate) return;
     updateData(state => {
@@ -216,6 +285,19 @@ const PlanPage = () => {
     });
   };
 
+  const toggleMealSheetTag = (tag: NutritionTag) => {
+    setMealSheet(prev => {
+      if (!prev) return prev;
+      const exists = prev.nutritionTags.includes(tag);
+      return {
+        ...prev,
+        nutritionTags: exists
+          ? prev.nutritionTags.filter(item => item !== tag)
+          : [...prev.nutritionTags, tag]
+      };
+    });
+  };
+
   const copyMenuRange = () => {
     if (!canCopyMenu) return;
     updateData(state => {
@@ -234,11 +316,13 @@ const PlanPage = () => {
             tasks: [],
             mealsPlan: { breakfast: [], lunch: [], dinner: [], snack: [] },
             workoutsPlan: [],
+            nutritionTargets: sourcePlan.nutritionTargets ?? {},
             requirements: { requireWeight: false, requireWaist: false, requirePhotos: [] }
           };
           state.planner.dayPlans.push(plan);
         }
         plan.mealsPlan = JSON.parse(JSON.stringify(sourcePlan.mealsPlan));
+        plan.nutritionTargets = sourcePlan.nutritionTargets ?? plan.nutritionTargets;
       }
       return { ...state };
     });
@@ -423,18 +507,70 @@ const PlanPage = () => {
                       })
                     }
                   />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold">Цели КБЖУ и приемы пищи</h3>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <input
                     className="input"
                     type="number"
-                    placeholder="Ккал-лимит"
-                    value={dayPlan.requirements.kcalTarget ?? ''}
+                    placeholder="Ккал"
+                    value={nutritionTargets.kcal ?? ''}
                     onChange={event =>
-                      updateData(state => {
-                        const plan = state.planner.dayPlans.find(item => item.date === editorDate);
-                        if (!plan) return { ...state };
-                        plan.requirements.kcalTarget = Number(event.target.value) || undefined;
-                        return { ...state };
-                      })
+                      updateNutritionTarget(
+                        'kcal',
+                        event.target.value ? Number(event.target.value) : undefined
+                      )
+                    }
+                  />
+                  <input
+                    className="input"
+                    type="number"
+                    placeholder="Белки"
+                    value={nutritionTargets.protein ?? ''}
+                    onChange={event =>
+                      updateNutritionTarget(
+                        'protein',
+                        event.target.value ? Number(event.target.value) : undefined
+                      )
+                    }
+                  />
+                  <input
+                    className="input"
+                    type="number"
+                    placeholder="Жиры"
+                    value={nutritionTargets.fat ?? ''}
+                    onChange={event =>
+                      updateNutritionTarget(
+                        'fat',
+                        event.target.value ? Number(event.target.value) : undefined
+                      )
+                    }
+                  />
+                  <input
+                    className="input"
+                    type="number"
+                    placeholder="Углеводы"
+                    value={nutritionTargets.carb ?? ''}
+                    onChange={event =>
+                      updateNutritionTarget(
+                        'carb',
+                        event.target.value ? Number(event.target.value) : undefined
+                      )
+                    }
+                  />
+                  <input
+                    className="input"
+                    type="number"
+                    placeholder="Приемы пищи"
+                    value={nutritionTargets.meals ?? ''}
+                    onChange={event =>
+                      updateNutritionTarget(
+                        'meals',
+                        event.target.value ? Number(event.target.value) : undefined
+                      )
                     }
                   />
                 </div>
@@ -453,7 +589,12 @@ const PlanPage = () => {
                         title: '',
                         grams: 150,
                         servings: 1,
-                        cheatCategory: 'pizza'
+                        cheatCategory: 'pizza',
+                        nutritionTags: [],
+                        plannedKcal: '',
+                        plannedProtein: '',
+                        plannedFat: '',
+                        plannedCarb: ''
                       })
                     }
                   >
@@ -644,16 +785,20 @@ const PlanPage = () => {
               {dayList.map(date => {
                 const plan = data.planner.dayPlans.find(item => item.date === date);
                 if (!plan) return null;
-                const kcal = plannedKcal(date);
+                const nutrition = plannedNutrition(date);
                 return (
                   <div key={date} className="card p-4">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <h3 className="text-sm font-semibold">{date}</h3>
-                        <p className="text-xs text-slate-500">План: {kcal.toFixed(0)} ккал</p>
+                        <p className="text-xs text-slate-500">
+                          План: {nutrition.kcal.toFixed(0)} ккал · Б {nutrition.protein.toFixed(0)} /
+                          Ж {nutrition.fat.toFixed(0)} / У {nutrition.carb.toFixed(0)}
+                        </p>
                       </div>
                       <span className="text-xs text-slate-400">
-                        Лимит: {plan.requirements.kcalTarget ?? '—'}
+                        Цель: {plan.nutritionTargets?.kcal ?? '—'} ккал · приёмов{' '}
+                        {plan.nutritionTargets?.meals ?? '—'}
                       </span>
                     </div>
                   </div>
@@ -737,7 +882,15 @@ const PlanPage = () => {
                   className="input"
                   value={mealSheet.refId ?? ''}
                   onChange={event =>
-                    setMealSheet(prev => (prev ? { ...prev, refId: event.target.value } : prev))
+                    setMealSheet(prev => {
+                      if (!prev) return prev;
+                      const refId = event.target.value;
+                      const tags =
+                        prev.kind === 'dish'
+                          ? data.library.recipes.find(item => item.id === refId)?.nutritionTags ?? []
+                          : data.library.products.find(item => item.id === refId)?.nutritionTags ?? [];
+                      return { ...prev, refId, nutritionTags: tags };
+                    })
                   }
                 >
                   <option value="">Выберите</option>
@@ -811,8 +964,71 @@ const PlanPage = () => {
                     <option value="other">Другое</option>
                   </select>
                 ) : null}
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    className="input"
+                    type="number"
+                    placeholder="Ккал"
+                    value={mealSheet.plannedKcal}
+                    onChange={event =>
+                      setMealSheet(prev =>
+                        prev ? { ...prev, plannedKcal: event.target.value } : prev
+                      )
+                    }
+                  />
+                  <input
+                    className="input"
+                    type="number"
+                    placeholder="Белки"
+                    value={mealSheet.plannedProtein}
+                    onChange={event =>
+                      setMealSheet(prev =>
+                        prev ? { ...prev, plannedProtein: event.target.value } : prev
+                      )
+                    }
+                  />
+                  <input
+                    className="input"
+                    type="number"
+                    placeholder="Жиры"
+                    value={mealSheet.plannedFat}
+                    onChange={event =>
+                      setMealSheet(prev =>
+                        prev ? { ...prev, plannedFat: event.target.value } : prev
+                      )
+                    }
+                  />
+                  <input
+                    className="input"
+                    type="number"
+                    placeholder="Углеводы"
+                    value={mealSheet.plannedCarb}
+                    onChange={event =>
+                      setMealSheet(prev =>
+                        prev ? { ...prev, plannedCarb: event.target.value } : prev
+                      )
+                    }
+                  />
+                </div>
               </>
             )}
+
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-slate-600">Метки питания</p>
+              <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+                {(Object.keys(nutritionTagLabels) as NutritionTag[]).map(tag => (
+                  <label key={tag} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={mealSheet.nutritionTags.includes(tag)}
+                      onChange={() => toggleMealSheetTag(tag)}
+                    />
+                    {nutritionTagLabels[tag]}
+                  </label>
+                ))}
+              </div>
+            </div>
 
             <button className="btn-primary w-full" onClick={addMealToPlan}>
               Сохранить в план

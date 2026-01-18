@@ -166,6 +166,78 @@ export const loadData = (): AppData => {
           plannedSteps: plan.plannedSteps ?? undefined
         }));
       }
+      if (!parsed.schemaVersion || parsed.schemaVersion < 8) {
+        migrated.library.products = (parsed.library?.products ?? []).map(product => ({
+          ...product,
+          nutritionTags: product.nutritionTags ?? []
+        }));
+        migrated.library.recipes = (parsed.library?.recipes ?? []).map(recipe => ({
+          ...recipe,
+          nutritionTags: recipe.nutritionTags ?? []
+        }));
+        migrated.logs.foodDays = (parsed.logs?.foodDays ?? []).map(day => ({
+          ...day,
+          entries: day.entries.map(entry => ({
+            ...entry,
+            nutritionTags:
+              entry.nutritionTags ??
+              (entry.meal === 'snack'
+                ? ['snack']
+                : entry.kind === 'cheat'
+                  ? ['cheat']
+                  : []),
+            proteinOverride: entry.proteinOverride ?? undefined,
+            fatOverride: entry.fatOverride ?? undefined,
+            carbOverride: entry.carbOverride ?? undefined
+          }))
+        }));
+        migrated.planner.dayPlans = (parsed.planner?.dayPlans ?? []).map(plan => ({
+          ...plan,
+          nutritionTargets:
+            plan.nutritionTargets ??
+            (plan.requirements?.kcalTarget
+              ? { kcal: plan.requirements.kcalTarget }
+              : undefined),
+          mealsPlan: {
+            breakfast: plan.mealsPlan?.breakfast?.map(item => ({
+              ...item,
+              plannedKcal: item.plannedKcal ?? undefined,
+              plannedProtein: item.plannedProtein ?? undefined,
+              plannedFat: item.plannedFat ?? undefined,
+              plannedCarb: item.plannedCarb ?? undefined,
+              nutritionTags:
+                item.nutritionTags ?? (item.kind === 'cheat' ? ['cheat'] : undefined)
+            })) ?? [],
+            lunch: plan.mealsPlan?.lunch?.map(item => ({
+              ...item,
+              plannedKcal: item.plannedKcal ?? undefined,
+              plannedProtein: item.plannedProtein ?? undefined,
+              plannedFat: item.plannedFat ?? undefined,
+              plannedCarb: item.plannedCarb ?? undefined,
+              nutritionTags:
+                item.nutritionTags ?? (item.kind === 'cheat' ? ['cheat'] : undefined)
+            })) ?? [],
+            dinner: plan.mealsPlan?.dinner?.map(item => ({
+              ...item,
+              plannedKcal: item.plannedKcal ?? undefined,
+              plannedProtein: item.plannedProtein ?? undefined,
+              plannedFat: item.plannedFat ?? undefined,
+              plannedCarb: item.plannedCarb ?? undefined,
+              nutritionTags:
+                item.nutritionTags ?? (item.kind === 'cheat' ? ['cheat'] : undefined)
+            })) ?? [],
+            snack: plan.mealsPlan?.snack?.map(item => ({
+              ...item,
+              plannedKcal: item.plannedKcal ?? undefined,
+              plannedProtein: item.plannedProtein ?? undefined,
+              plannedFat: item.plannedFat ?? undefined,
+              plannedCarb: item.plannedCarb ?? undefined,
+              nutritionTags:
+                item.nutritionTags ?? (item.kind === 'cheat' ? ['cheat'] : undefined)
+            })) ?? []
+          }
+        }));
+      }
       return migrated;
     }
     return parsed;
