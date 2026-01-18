@@ -61,6 +61,68 @@ export const calcMovementSessionCoefficient = (
   );
 };
 
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+type MovementCaloriesContext = {
+  weightKg?: number;
+  intakeKcal?: number;
+  activityCoefficient?: number;
+  bodyFatPercent?: number;
+  muscleMassKg?: number;
+  bodyWaterPercent?: number;
+};
+
+export const estimateMovementCalories = (
+  log: MovementSessionLog,
+  activity: MovementActivity | undefined,
+  defaults: ActivityDefaults,
+  context: MovementCaloriesContext = {}
+) => {
+  if (!log.durationMinutes || log.durationMinutes <= 0) return 0;
+  const perKcal = activity?.activityMetrics?.perKcal ?? defaults.kcal;
+  if (!perKcal) return 0;
+  const coefficient = calcMovementSessionCoefficient(
+    { ...log, calories: 0 },
+    activity,
+    defaults,
+    { includeSteps: true }
+  );
+  const baseCalories = coefficient / perKcal;
+  const weightFactor = context.weightKg
+    ? clamp(context.weightKg / 70, 0.7, 1.3)
+    : 1;
+  const intakeFactor = context.intakeKcal
+    ? clamp(context.intakeKcal / 2000, 0.85, 1.15)
+    : 1;
+  const activityFactor = context.activityCoefficient
+    ? clamp(1 + context.activityCoefficient * 0.05, 0.9, 1.2)
+    : 1;
+  const bodyFatFactor =
+    context.bodyFatPercent !== undefined
+      ? clamp(1 - (context.bodyFatPercent - 20) * 0.003, 0.9, 1.1)
+      : 1;
+  const muscleMassFactor =
+    context.muscleMassKg !== undefined
+      ? clamp(1 + (context.muscleMassKg - 30) * 0.002, 0.9, 1.1)
+      : 1;
+  const bodyWaterFactor =
+    context.bodyWaterPercent !== undefined
+      ? clamp(1 + (context.bodyWaterPercent - 55) * 0.002, 0.95, 1.05)
+      : 1;
+  return Math.max(
+    0,
+    Math.round(
+      baseCalories *
+        weightFactor *
+        intakeFactor *
+        activityFactor *
+        bodyFatFactor *
+        muscleMassFactor *
+        bodyWaterFactor
+    )
+  );
+};
+
 export const calcProtocolDurationMinutes = (protocol?: Protocol) => {
   if (!protocol) return undefined;
   const totalDurationSec = protocol.steps.reduce(

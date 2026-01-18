@@ -5,6 +5,13 @@ import { calcFoodEntry, calcMealPlanItem } from '../utils/nutrition';
 import { combineDateTime, currentTimeString, todayISO } from '../utils/date';
 import { getTimeOfDayFromDateTime, timeOfDayLabels } from '../utils/timeOfDay';
 import {
+  calcMovementSessionCoefficient,
+  calcStepsCoefficient,
+  calcTrainingLogCoefficient,
+  estimateMovementCalories,
+  resolveActivityDefaults
+} from '../utils/activity';
+import {
   ActivityLog,
   FoodEntry,
   NutritionTag,
@@ -160,6 +167,21 @@ const TrackPage = () => {
 
   const toDateTime = (date: string, time?: string) => combineDateTime(date, time);
 
+  const resolveWeightForDateTime = (dateTime: string) =>
+    data.logs.weight
+      .filter(log => log.dateTime <= dateTime)
+      .sort((a, b) => a.dateTime.localeCompare(b.dateTime))
+      .slice(-1)[0]?.weightKg;
+
+  const estimateMovement = (log: MovementSessionLog) => {
+    const activity = data.library.movementActivities.find(item => item.id === log.activityRef);
+    return estimateMovementCalories(log, activity, activityDefaults, {
+      weightKg: resolveWeightForDateTime(log.dateTime),
+      intakeKcal: totals.kcal,
+      activityCoefficient
+    });
+  };
+
   const renderNutritionTags = (tags?: NutritionTag[]) => {
     if (!tags?.length) return null;
     return (
@@ -177,6 +199,17 @@ const TrackPage = () => {
   const movementSessions = data.logs.movementSessions.filter(
     log => log.dateTime.slice(0, 10) === selectedDate
   );
+  const activityDefaults = resolveActivityDefaults(data.library.activityDefaults);
+  const activityCoefficient = [
+    trainingLogs.reduce((sum, log) => sum + calcTrainingLogCoefficient(log, activityDefaults), 0),
+    movementSessions.reduce((sum, log) => {
+      const activity = data.library.movementActivities.find(item => item.id === log.activityRef);
+      return sum + calcMovementSessionCoefficient(log, activity, activityDefaults, {
+        includeSteps: !movementDay?.steps
+      });
+    }, 0),
+    calcStepsCoefficient(movementDay?.steps ?? 0, activityDefaults)
+  ].reduce((sum, value) => sum + value, 0);
   const defaultMovementActivityId = data.library.movementActivities[0]?.id ?? '';
 
   useEffect(() => {
@@ -318,7 +351,6 @@ const TrackPage = () => {
         activityRef,
         durationMinutes: 20,
         steps: 0,
-        calories: 0,
         plannedFlights: 10,
         timeOfDay: getTimeOfDayFromDateTime(new Date().toISOString())
       }
@@ -330,7 +362,7 @@ const TrackPage = () => {
     const payload = {
       ...movementDraft,
       steps: movementDraft.steps || undefined,
-      calories: movementDraft.calories || undefined,
+      calories: estimateMovement(movementDraft) || undefined,
       timeOfDay: getTimeOfDayFromDateTime(movementDraft.dateTime)
     };
     if (movementDraft.id) {
@@ -1259,17 +1291,9 @@ const TrackPage = () => {
                 )
               }
             />
-            <label className="text-sm font-semibold text-slate-600">Калории</label>
-            <input
-              type="number"
-              className="input"
-              value={movementDraft.calories ?? 0}
-              onChange={event =>
-                setMovementDraft(prev =>
-                  prev ? { ...prev, calories: Number(event.target.value) } : prev
-                )
-              }
-            />
+            <label className="text-sm font-semibold text-slate-600">
+              Калории (расчёт): {estimateMovement(movementDraft).toFixed(0)} ккал
+            </label>
             <label className="text-sm font-semibold text-slate-600">Дистанция (км)</label>
             <input
               type="number"
