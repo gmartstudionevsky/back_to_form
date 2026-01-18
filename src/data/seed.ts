@@ -685,7 +685,9 @@ export const seedData: AppData = {
           requireWaist: false,
           requirePhotos: ['front'],
           smokingTargetMax: 5,
-          kcalTarget: 1800
+          kcalTarget: 1800,
+          sleepWakeTarget: '07:30',
+          sleepDurationTargetMinutes: 450
         }
       },
       {
@@ -767,7 +769,9 @@ export const seedData: AppData = {
           requireWaist: true,
           requirePhotos: ['front', 'side'],
           smokingTargetMax: 5,
-          kcalTarget: 1800
+          kcalTarget: 1800,
+          sleepWakeTarget: '07:30',
+          sleepDurationTargetMinutes: 450
         }
       },
       {
@@ -849,7 +853,9 @@ export const seedData: AppData = {
           requireWaist: false,
           requirePhotos: [],
           smokingTargetMax: 4,
-          kcalTarget: 1750
+          kcalTarget: 1750,
+          sleepWakeTarget: '07:00',
+          sleepDurationTargetMinutes: 435
         }
       }
     ]

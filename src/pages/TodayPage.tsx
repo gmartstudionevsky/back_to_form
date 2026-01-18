@@ -20,6 +20,7 @@ import {
   MealComponent,
   MealComponentType,
   MovementSessionLog,
+  SleepLog,
   NutritionTag,
   WorkoutPlanItem
 } from '../types';
@@ -93,6 +94,9 @@ const TodayPage = () => {
     deleteSmokingLog,
     addDrinkLog,
     deleteDrinkLog,
+    addSleepLog,
+    updateSleepLog,
+    deleteSleepLog,
     addWeightLog,
     addWaistLog,
     addPhotoMeta,
@@ -107,6 +111,7 @@ const TodayPage = () => {
     | 'weight'
     | 'waist'
     | 'photo'
+    | 'sleep'
     | 'meal-edit'
     | 'date'
     | null
@@ -172,11 +177,24 @@ const TodayPage = () => {
   });
   const [weightForm, setWeightForm] = useState({ weightKg: 72, time: currentTimeString() });
   const [waistForm, setWaistForm] = useState({ waistCm: 80 });
+  const [sleepForm, setSleepForm] = useState({
+    id: '',
+    date: selectedDate,
+    bedTime: '23:00',
+    wakeTime: '07:30',
+    quality1to5: 3,
+    notes: ''
+  });
+  const [quickSleepTimes, setQuickSleepTimes] = useState({
+    bedTime: '23:00',
+    wakeTime: '07:30'
+  });
 
   const dayPlan = data.planner.dayPlans.find(plan => plan.date === selectedDate);
   const foodDay = data.logs.foodDays.find(day => day.date === selectedDate);
   const nutritionTargets = dayPlan?.nutritionTargets ?? {};
   const drinkLogs = data.logs.drinks.filter(log => log.dateTime.slice(0, 10) === selectedDate);
+  const sleepLogs = data.logs.sleep.filter(log => log.date === selectedDate);
   const plannedMealsCount = dayPlan
     ? (Object.keys(mealLabels) as FoodEntry['meal'][]).filter(
         meal => dayPlan.mealsPlan[meal].length > 0 || Boolean(dayPlan.mealTimes?.[meal])
@@ -220,6 +238,17 @@ const TodayPage = () => {
       };
     });
   }, [defaultDrink]);
+
+  useEffect(() => {
+    const latestSleep = data.logs.sleep
+      .filter(log => log.date === selectedDate)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-1)[0];
+    setQuickSleepTimes({
+      bedTime: latestSleep?.bedTime ?? '23:00',
+      wakeTime: latestSleep?.wakeTime ?? '07:30'
+    });
+  }, [data.logs.sleep, selectedDate]);
 
   const totals = useMemo(() => {
     const entries = foodDay?.entries ?? [];
@@ -891,6 +920,39 @@ const TodayPage = () => {
       minute: '2-digit'
     });
 
+  const parseTimeToMinutes = (time?: string) => {
+    if (!time) return null;
+    const [hours, minutes] = time.split(':').map(Number);
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+    return hours * 60 + minutes;
+  };
+
+  const formatMinutes = (minutes?: number | null) => {
+    if (!minutes && minutes !== 0) return '—';
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours}ч ${mins}м`;
+  };
+
+  const calcSleepDuration = (log: SleepLog) => {
+    const bed = parseTimeToMinutes(log.bedTime);
+    const wake = parseTimeToMinutes(log.wakeTime);
+    if (bed === null || wake === null) return null;
+    let duration = wake - bed;
+    if (duration <= 0) duration += 24 * 60;
+    return duration;
+  };
+
+  const formatWakeDelta = (target?: string, actual?: string) => {
+    const targetMinutes = parseTimeToMinutes(target);
+    const actualMinutes = parseTimeToMinutes(actual);
+    if (targetMinutes === null || actualMinutes === null) return '—';
+    const diff = actualMinutes - targetMinutes;
+    if (diff === 0) return 'вовремя';
+    const signLabel = diff > 0 ? 'позже' : 'раньше';
+    return `${Math.abs(diff)}м ${signLabel}`;
+  };
+
   const getFoodEntryTitle = (entry: FoodEntry) => {
     if (entry.kind === 'product') {
       return data.library.products.find(product => product.id === entry.refId)?.name ?? 'Продукт';
@@ -1093,6 +1155,44 @@ const TodayPage = () => {
     portionMl: log.portionMl,
     portionsCount: log.portionsCount
   }));
+  const sleepHistory = useMemo(
+    () =>
+      data.logs.sleep
+        .filter(log => log.date <= selectedDate)
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    [data.logs.sleep, selectedDate]
+  );
+  const recentSleep = sleepHistory.slice(0, 7);
+  const sleepDurations = recentSleep
+    .map(log => calcSleepDuration(log))
+    .filter((value): value is number => value !== null);
+  const avgSleepMinutes = sleepDurations.length
+    ? Math.round(sleepDurations.reduce((sum, value) => sum + value, 0) / sleepDurations.length)
+    : undefined;
+  const lastSleep = sleepLogs.slice(-1)[0];
+  const lastSleepDuration = lastSleep ? calcSleepDuration(lastSleep) : null;
+  const sleepTargetDuration = requirements?.sleepDurationTargetMinutes;
+  const sleepTargetWake = requirements?.sleepWakeTarget;
+  const sleepDurationDelta =
+    lastSleepDuration !== null && sleepTargetDuration !== undefined
+      ? lastSleepDuration - sleepTargetDuration
+      : null;
+  const saveQuickSleepTimes = () => {
+    const baseLog = sleepLogs.slice(-1)[0];
+    const payload = {
+      id: baseLog?.id ?? '',
+      date: selectedDate,
+      bedTime: quickSleepTimes.bedTime,
+      wakeTime: quickSleepTimes.wakeTime,
+      quality1to5: baseLog?.quality1to5 ?? 3,
+      notes: baseLog?.notes ?? ''
+    };
+    if (payload.id) {
+      updateSleepLog(payload);
+    } else {
+      addSleepLog(payload);
+    }
+  };
 
   const editingMeal = mealEdit ?? 'breakfast';
   const editComponents = mealEdit ? mealComponents[mealEdit] : [];
@@ -1165,15 +1265,9 @@ const TodayPage = () => {
             ) : null}
             <button
               className="btn-secondary w-full min-h-[30px] px-2.5 py-1.5 text-[11px] sm:min-h-[36px] sm:px-3 sm:py-2 sm:text-xs"
-              onClick={() => scrollToSection('smoking')}
+              onClick={() => scrollToSection('health')}
             >
-              Курение
-            </button>
-            <button
-              className="btn-secondary w-full min-h-[30px] px-2.5 py-1.5 text-[11px] sm:min-h-[36px] sm:px-3 sm:py-2 sm:text-xs"
-              onClick={() => scrollToSection('water')}
-            >
-              Вода
+              Здоровье
             </button>
             {requirements &&
             (requirements.requireWeight || requirements.requireWaist || requiredPhotos.length > 0) ? (
@@ -2025,111 +2119,175 @@ const TodayPage = () => {
         </div>
       )}
 
-      <div className="card p-4 space-y-2" id="smoking">
-        <h2 className="section-title">Курение</h2>
-        <p className="text-sm text-slate-500">
-          Лимит: {requirements?.smokingTargetMax ?? '—'} · Факт: {cigaretteCount}
-        </p>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <button
-            className="btn-secondary"
-            onClick={() => {
-              setSmokingForm(prev => ({ ...prev, time: currentTimeString() }));
-              setSheet('smoking');
-            }}
-          >
-            Добавить сигарету
-          </button>
-          <button className="btn-secondary" onClick={() => scrollToSection('summary')}>
+      <div className="card p-4 space-y-4" id="health">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="section-title">Здоровье</h2>
+          <button className="btn-secondary w-full sm:w-auto" onClick={() => scrollToSection('summary')}>
             Смотреть сводку
           </button>
         </div>
-      </div>
-
-      <div className="card p-4 space-y-2" id="water">
-        <h2 className="section-title">Водный баланс</h2>
-        <p className="text-sm text-slate-500">
-          Эквивалент воды: {hydrationEquivalent.toFixed(0)} мл · Цель:{' '}
-          {hydrationTargetMl !== undefined ? hydrationTargetMl.toFixed(0) : '—'} мл · Коэф.{' '}
-          {hydrationTargetMl !== undefined ? hydrationCoefficient.toFixed(2) : '—'}
-        </p>
-        <p className="text-xs text-slate-400">
-          Напитки: {drinkTotalMl.toFixed(0)} мл · Еда: {foodHydrationMl.toFixed(0)} мл ·
-          Вес: {hydrationWeight ?? '—'} кг · Активность: {activityCoefficient.toFixed(2)}
-        </p>
-        <div className="rounded-2xl border border-slate-200 p-3 space-y-3">
-          <div className="grid gap-2 sm:grid-cols-[1.2fr_1fr_0.6fr_0.8fr_auto] sm:items-end">
-            <label className="text-xs text-slate-500">
-              Напиток
-              <select
-                className="input mt-1"
-                value={drinkForm.drinkId}
-                onChange={event => {
-                  const nextId = event.target.value;
-                  const drink = data.library.drinks.find(item => item.id === nextId);
-                  const portion = drink?.portions[0];
-                  setDrinkForm(prev => ({
-                    ...prev,
-                    drinkId: nextId,
-                    portionLabel: portion?.label ?? '',
-                    portionMl: portion?.ml ?? 0
-                  }));
+        <div className="grid gap-3 lg:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 p-3 space-y-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="text-sm font-semibold text-slate-500">Сон</h3>
+              <button
+                className="btn-secondary w-full sm:w-auto"
+                onClick={() => {
+                  const baseLog = sleepLogs.slice(-1)[0];
+                  setSleepForm({
+                    id: baseLog?.id ?? '',
+                    date: selectedDate,
+                    bedTime: baseLog?.bedTime ?? '23:00',
+                    wakeTime: baseLog?.wakeTime ?? '07:30',
+                    quality1to5: baseLog?.quality1to5 ?? 3,
+                    notes: baseLog?.notes ?? ''
+                  });
+                  setSheet('sleep');
                 }}
               >
-                {data.library.drinks.map(drink => (
-                  <option key={drink.id} value={drink.id}>
-                    {drink.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-xs text-slate-500">
-              Емкость
-              <select
-                className="input mt-1"
-                value={drinkForm.portionLabel}
-                onChange={event => {
-                  const drink = data.library.drinks.find(item => item.id === drinkForm.drinkId);
-                  const portion = drink?.portions.find(item => item.label === event.target.value);
-                  setDrinkForm(prev => ({
-                    ...prev,
-                    portionLabel: event.target.value,
-                    portionMl: portion?.ml ?? 0
-                  }));
-                }}
-              >
-                {data.library.drinks
-                  .find(item => item.id === drinkForm.drinkId)
-                  ?.portions.map(portion => (
-                    <option key={portion.label} value={portion.label}>
-                      {portion.label}
+                Детали
+              </button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="text-xs text-slate-500">
+                Лёг спать
+                <input
+                  type="time"
+                  className="input mt-1"
+                  value={quickSleepTimes.bedTime}
+                  onChange={event =>
+                    setQuickSleepTimes(prev => ({ ...prev, bedTime: event.target.value }))
+                  }
+                />
+              </label>
+              <label className="text-xs text-slate-500">
+                Встал
+                <input
+                  type="time"
+                  className="input mt-1"
+                  value={quickSleepTimes.wakeTime}
+                  onChange={event =>
+                    setQuickSleepTimes(prev => ({ ...prev, wakeTime: event.target.value }))
+                  }
+                />
+              </label>
+            </div>
+            <button className="btn-primary w-full" onClick={saveQuickSleepTimes}>
+              Сохранить время сна
+            </button>
+            <p className="text-sm text-slate-600">
+              Последний: {lastSleep?.bedTime ?? '—'} → {lastSleep?.wakeTime ?? '—'} ·{' '}
+              {formatMinutes(lastSleepDuration)}
+            </p>
+            <p className="text-xs text-slate-500">
+              Цель: {formatMinutes(sleepTargetDuration)} · Δ{' '}
+              {sleepDurationDelta !== null ? `${sleepDurationDelta > 0 ? '+' : ''}${sleepDurationDelta}м` : '—'}
+            </p>
+            <p className="text-xs text-slate-500">
+              Подъём: {sleepTargetWake ?? '—'} · фактически{' '}
+              {lastSleep?.wakeTime ?? '—'} ({formatWakeDelta(sleepTargetWake, lastSleep?.wakeTime)})
+            </p>
+            <p className="text-xs text-slate-400">Средняя длительность (7 дней): {formatMinutes(avgSleepMinutes)}</p>
+            <div className="mt-2 space-y-1 text-xs text-slate-500">
+              {recentSleep.length === 0 ? (
+                <p>История пуста.</p>
+              ) : (
+                recentSleep.map(log => (
+                  <div key={log.id} className="flex items-center justify-between">
+                    <span>{log.date}</span>
+                    <span>{formatMinutes(calcSleepDuration(log))}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 p-3 space-y-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="text-sm font-semibold text-slate-500">Вода</h3>
+              <button className="btn-secondary w-full sm:w-auto" onClick={() => scrollToSection('summary')}>
+                Сводка
+              </button>
+            </div>
+            <p className="text-sm text-slate-600">
+              Эквивалент: {hydrationEquivalent.toFixed(0)} мл · Цель:{' '}
+              {hydrationTargetMl !== undefined ? hydrationTargetMl.toFixed(0) : '—'} мл
+            </p>
+            <p className="text-xs text-slate-400">
+              Напитки: {drinkTotalMl.toFixed(0)} мл · Еда: {foodHydrationMl.toFixed(0)} мл
+            </p>
+            <div className="grid gap-2 sm:grid-cols-[1.2fr_1fr]">
+              <label className="text-xs text-slate-500">
+                Напиток
+                <select
+                  className="input mt-1"
+                  value={drinkForm.drinkId}
+                  onChange={event => {
+                    const nextId = event.target.value;
+                    const drink = data.library.drinks.find(item => item.id === nextId);
+                    const portion = drink?.portions[0];
+                    setDrinkForm(prev => ({
+                      ...prev,
+                      drinkId: nextId,
+                      portionLabel: portion?.label ?? '',
+                      portionMl: portion?.ml ?? 0
+                    }));
+                  }}
+                >
+                  {data.library.drinks.map(drink => (
+                    <option key={drink.id} value={drink.id}>
+                      {drink.name}
                     </option>
                   ))}
-              </select>
-            </label>
-            <label className="text-xs text-slate-500">
-              Порции
-              <input
-                type="number"
-                min={1}
-                className="input mt-1"
-                value={drinkForm.portionsCount}
-                onChange={event =>
-                  setDrinkForm(prev => ({ ...prev, portionsCount: Number(event.target.value) }))
-                }
-              />
-            </label>
-            <label className="text-xs text-slate-500">
-              Время
-              <input
-                type="time"
-                className="input mt-1"
-                value={drinkForm.time}
-                onChange={event => setDrinkForm(prev => ({ ...prev, time: event.target.value }))}
-              />
-            </label>
+                </select>
+              </label>
+              <label className="text-xs text-slate-500">
+                Емкость
+                <select
+                  className="input mt-1"
+                  value={drinkForm.portionLabel}
+                  onChange={event => {
+                    const drink = data.library.drinks.find(item => item.id === drinkForm.drinkId);
+                    const portion = drink?.portions.find(item => item.label === event.target.value);
+                    setDrinkForm(prev => ({
+                      ...prev,
+                      portionLabel: event.target.value,
+                      portionMl: portion?.ml ?? 0
+                    }));
+                  }}
+                >
+                  {data.library.drinks
+                    .find(item => item.id === drinkForm.drinkId)
+                    ?.portions.map(portion => (
+                      <option key={portion.label} value={portion.label}>
+                        {portion.label}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label className="text-xs text-slate-500">
+                Порции
+                <input
+                  type="number"
+                  min={1}
+                  className="input mt-1"
+                  value={drinkForm.portionsCount}
+                  onChange={event =>
+                    setDrinkForm(prev => ({ ...prev, portionsCount: Number(event.target.value) }))
+                  }
+                />
+              </label>
+              <label className="text-xs text-slate-500">
+                Время
+                <input
+                  type="time"
+                  className="input mt-1"
+                  value={drinkForm.time}
+                  onChange={event => setDrinkForm(prev => ({ ...prev, time: event.target.value }))}
+                />
+              </label>
+            </div>
             <button
-              className="btn-primary sm:mb-1"
+              className="btn-primary w-full"
               onClick={() => {
                 if (!drinkForm.drinkId || !drinkForm.portionLabel || !drinkForm.portionMl) return;
                 addDrinkLog({
@@ -2143,12 +2301,38 @@ const TodayPage = () => {
                 setDrinkForm(prev => ({ ...prev, time: currentTimeString() }));
               }}
             >
-              Добавить
+              Добавить напиток
             </button>
           </div>
-          <button className="btn-secondary w-full sm:w-auto" onClick={() => scrollToSection('summary')}>
-            Смотреть сводку
-          </button>
+          <div className="rounded-2xl border border-slate-200 p-3 space-y-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="text-sm font-semibold text-slate-500">Курение</h3>
+              <button
+                className="btn-secondary w-full sm:w-auto"
+                onClick={() => {
+                  setSmokingForm(prev => ({ ...prev, time: currentTimeString() }));
+                  setSheet('smoking');
+                }}
+              >
+                Добавить
+              </button>
+            </div>
+            <p className="text-sm text-slate-600">
+              Лимит: {requirements?.smokingTargetMax ?? '—'} · Факт: {cigaretteCount}
+            </p>
+            <div className="mt-2 space-y-1 text-xs text-slate-500">
+              {smokingItems.length === 0 ? (
+                <p>Записей нет.</p>
+              ) : (
+                smokingItems.slice(-3).map(item => (
+                  <div key={item.id} className="flex items-center justify-between">
+                    <span>{item.time}</span>
+                    <span>{item.count} шт</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2789,6 +2973,86 @@ const TodayPage = () => {
         >
           Сохранить
         </button>
+      </BottomSheet>
+
+      <BottomSheet
+        open={sheet === 'sleep'}
+        title={sleepForm.id ? 'Редактировать сон' : 'Добавить сон'}
+        onClose={() => setSheet(null)}
+      >
+        <label className="text-sm font-semibold text-slate-600">Дата</label>
+        <input
+          type="date"
+          className="input"
+          value={sleepForm.date}
+          onChange={event => setSleepForm(prev => ({ ...prev, date: event.target.value }))}
+        />
+        <label className="text-sm font-semibold text-slate-600">Отбой</label>
+        <input
+          type="time"
+          className="input"
+          value={sleepForm.bedTime}
+          onChange={event => setSleepForm(prev => ({ ...prev, bedTime: event.target.value }))}
+        />
+        <label className="text-sm font-semibold text-slate-600">Подъём</label>
+        <input
+          type="time"
+          className="input"
+          value={sleepForm.wakeTime}
+          onChange={event => setSleepForm(prev => ({ ...prev, wakeTime: event.target.value }))}
+        />
+        <label className="text-sm font-semibold text-slate-600">Качество сна (1-5)</label>
+        <input
+          type="number"
+          min={1}
+          max={5}
+          className="input"
+          value={sleepForm.quality1to5}
+          onChange={event =>
+            setSleepForm(prev => ({ ...prev, quality1to5: Number(event.target.value) }))
+          }
+        />
+        <label className="text-sm font-semibold text-slate-600">Заметки</label>
+        <textarea
+          className="input min-h-[90px]"
+          value={sleepForm.notes}
+          onChange={event => setSleepForm(prev => ({ ...prev, notes: event.target.value }))}
+          placeholder="Например: просыпался ночью"
+        />
+        <div className="grid gap-2 sm:grid-cols-2">
+          {sleepForm.id ? (
+            <button
+              className="btn-secondary w-full text-red-500"
+              onClick={() => {
+                deleteSleepLog(sleepForm.id);
+                setSheet(null);
+              }}
+            >
+              Удалить
+            </button>
+          ) : null}
+          <button
+            className="btn-primary w-full"
+            onClick={() => {
+              const payload = {
+                id: sleepForm.id,
+                date: sleepForm.date,
+                bedTime: sleepForm.bedTime,
+                wakeTime: sleepForm.wakeTime,
+                quality1to5: sleepForm.quality1to5,
+                notes: sleepForm.notes
+              };
+              if (sleepForm.id) {
+                updateSleepLog(payload);
+              } else {
+                addSleepLog(payload);
+              }
+              setSheet(null);
+            }}
+          >
+            Сохранить
+          </button>
+        </div>
       </BottomSheet>
 
       <BottomSheet open={sheet === 'weight'} title="Вес" onClose={() => setSheet(null)}>
