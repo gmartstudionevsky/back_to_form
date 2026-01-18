@@ -103,7 +103,6 @@ const TodayPage = () => {
     | 'food'
     | 'training'
     | 'smoking'
-    | 'drink'
     | 'weight'
     | 'waist'
     | 'photo'
@@ -204,6 +203,24 @@ const TodayPage = () => {
       { kcal: 0, protein: 0, fat: 0, carb: 0 }
     );
   }, [drinkLogs, data.library.drinks]);
+  const defaultDrink = useMemo(
+    () => data.library.drinks.find(item => item.id === 'drink-water') ?? data.library.drinks[0],
+    [data.library.drinks]
+  );
+
+  useEffect(() => {
+    if (!defaultDrink) return;
+    setDrinkForm(prev => {
+      if (prev.drinkId) return prev;
+      const portion = defaultDrink.portions[0];
+      return {
+        ...prev,
+        drinkId: defaultDrink.id,
+        portionLabel: portion?.label ?? '',
+        portionMl: portion?.ml ?? 0
+      };
+    });
+  }, [defaultDrink]);
 
   const totals = useMemo(() => {
     const entries = foodDay?.entries ?? [];
@@ -1986,17 +2003,96 @@ const TodayPage = () => {
           Напитки: {drinkTotalMl.toFixed(0)} мл · Еда: {foodHydrationMl.toFixed(0)} мл ·
           Вес: {hydrationWeight ?? '—'} кг · Активность: {activityCoefficient.toFixed(2)}
         </p>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <button
-            className="btn-secondary"
-            onClick={() => {
-              setDrinkForm(prev => ({ ...prev, time: currentTimeString() }));
-              setSheet('drink');
-            }}
-          >
-            Добавить напиток
-          </button>
-          <button className="btn-secondary" onClick={() => scrollToSection('summary')}>
+        <div className="rounded-2xl border border-slate-200 p-3 space-y-3">
+          <div className="grid gap-2 sm:grid-cols-[1.2fr_1fr_0.6fr_0.8fr_auto] sm:items-end">
+            <label className="text-xs text-slate-500">
+              Напиток
+              <select
+                className="input mt-1"
+                value={drinkForm.drinkId}
+                onChange={event => {
+                  const nextId = event.target.value;
+                  const drink = data.library.drinks.find(item => item.id === nextId);
+                  const portion = drink?.portions[0];
+                  setDrinkForm(prev => ({
+                    ...prev,
+                    drinkId: nextId,
+                    portionLabel: portion?.label ?? '',
+                    portionMl: portion?.ml ?? 0
+                  }));
+                }}
+              >
+                {data.library.drinks.map(drink => (
+                  <option key={drink.id} value={drink.id}>
+                    {drink.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs text-slate-500">
+              Емкость
+              <select
+                className="input mt-1"
+                value={drinkForm.portionLabel}
+                onChange={event => {
+                  const drink = data.library.drinks.find(item => item.id === drinkForm.drinkId);
+                  const portion = drink?.portions.find(item => item.label === event.target.value);
+                  setDrinkForm(prev => ({
+                    ...prev,
+                    portionLabel: event.target.value,
+                    portionMl: portion?.ml ?? 0
+                  }));
+                }}
+              >
+                {data.library.drinks
+                  .find(item => item.id === drinkForm.drinkId)
+                  ?.portions.map(portion => (
+                    <option key={portion.label} value={portion.label}>
+                      {portion.label}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="text-xs text-slate-500">
+              Порции
+              <input
+                type="number"
+                min={1}
+                className="input mt-1"
+                value={drinkForm.portionsCount}
+                onChange={event =>
+                  setDrinkForm(prev => ({ ...prev, portionsCount: Number(event.target.value) }))
+                }
+              />
+            </label>
+            <label className="text-xs text-slate-500">
+              Время
+              <input
+                type="time"
+                className="input mt-1"
+                value={drinkForm.time}
+                onChange={event => setDrinkForm(prev => ({ ...prev, time: event.target.value }))}
+              />
+            </label>
+            <button
+              className="btn-primary sm:mb-1"
+              onClick={() => {
+                if (!drinkForm.drinkId || !drinkForm.portionLabel || !drinkForm.portionMl) return;
+                addDrinkLog({
+                  id: '',
+                  dateTime: toDateTime(selectedDate, drinkForm.time),
+                  drinkId: drinkForm.drinkId,
+                  portionLabel: drinkForm.portionLabel,
+                  portionMl: drinkForm.portionMl,
+                  portionsCount: drinkForm.portionsCount
+                });
+                setDrinkForm(prev => ({ ...prev, time: currentTimeString() }));
+              }}
+            >
+              Добавить
+            </button>
+          </div>
+          <button className="btn-secondary w-full sm:w-auto" onClick={() => scrollToSection('summary')}>
             Смотреть сводку
           </button>
         </div>
@@ -2647,90 +2743,6 @@ const TodayPage = () => {
               trigger: smokingForm.trigger,
               stressLevel1to5: smokingForm.stress,
               ruleApplied: smokingForm.ruleApplied
-            });
-            setSheet(null);
-          }}
-        >
-          Сохранить
-        </button>
-      </BottomSheet>
-
-      <BottomSheet open={sheet === 'drink'} title="Добавить напиток" onClose={() => setSheet(null)}>
-        <label className="text-sm font-semibold text-slate-600">Напиток</label>
-        <select
-          className="input"
-          value={drinkForm.drinkId}
-          onChange={event => {
-            const nextId = event.target.value;
-            const drink = data.library.drinks.find(item => item.id === nextId);
-            const firstPortion = drink?.portions[0];
-            setDrinkForm(prev => ({
-              ...prev,
-              drinkId: nextId,
-              portionLabel: firstPortion?.label ?? '',
-              portionMl: firstPortion?.ml ?? 0
-            }));
-          }}
-        >
-          <option value="">Выберите напиток</option>
-          {data.library.drinks.map(drink => (
-            <option key={drink.id} value={drink.id}>
-              {drink.name}
-            </option>
-          ))}
-        </select>
-        <label className="text-sm font-semibold text-slate-600">Объем</label>
-        <select
-          className="input"
-          value={drinkForm.portionLabel}
-          onChange={event => {
-            const drink = data.library.drinks.find(item => item.id === drinkForm.drinkId);
-            const portion = drink?.portions.find(item => item.label === event.target.value);
-            setDrinkForm(prev => ({
-              ...prev,
-              portionLabel: event.target.value,
-              portionMl: portion?.ml ?? 0
-            }));
-          }}
-          disabled={!drinkForm.drinkId}
-        >
-          <option value="">Выберите объем</option>
-          {data.library.drinks
-            .find(item => item.id === drinkForm.drinkId)
-            ?.portions.map(portion => (
-              <option key={portion.label} value={portion.label}>
-                {portion.label}
-              </option>
-            ))}
-        </select>
-        <label className="text-sm font-semibold text-slate-600">Количество порций</label>
-        <input
-          type="number"
-          min={1}
-          className="input"
-          value={drinkForm.portionsCount}
-          onChange={event =>
-            setDrinkForm(prev => ({ ...prev, portionsCount: Number(event.target.value) }))
-          }
-        />
-        <label className="text-sm font-semibold text-slate-600">Время</label>
-        <input
-          type="time"
-          className="input"
-          value={drinkForm.time}
-          onChange={event => setDrinkForm(prev => ({ ...prev, time: event.target.value }))}
-        />
-        <button
-          className="btn-primary w-full"
-          onClick={() => {
-            if (!drinkForm.drinkId || !drinkForm.portionLabel || !drinkForm.portionMl) return;
-            addDrinkLog({
-              id: '',
-              dateTime: toDateTime(selectedDate, drinkForm.time),
-              drinkId: drinkForm.drinkId,
-              portionLabel: drinkForm.portionLabel,
-              portionMl: drinkForm.portionMl,
-              portionsCount: drinkForm.portionsCount
             });
             setSheet(null);
           }}
