@@ -74,22 +74,68 @@ const ActivityPage = () => {
   const steps = movementDay?.steps ?? 0;
   const stepsScore = calcStepsCoefficient(steps, activityDefaults);
 
+  const weeklyDates = useMemo(() => {
+    const base = new Date(todayISO());
+    const options = Array.from({ length: 10 }, (_, index) => {
+      const date = new Date(base);
+      date.setDate(base.getDate() - index);
+      return date.toISOString().slice(0, 10);
+    });
+    if (!options.includes(selectedDate)) {
+      options.unshift(selectedDate);
+    }
+    return options;
+  }, [selectedDate]);
+
+  const weeklyMovement = useMemo(() => {
+    const recentDates = weeklyDates.slice(0, 7);
+    const totals = recentDates.map(date => {
+      const dayTrainings = data.logs.training.filter(log => log.dateTime.slice(0, 10) === date);
+      const dayMovements = data.logs.movementSessions.filter(
+        log => log.dateTime.slice(0, 10) === date
+      );
+      const minutes =
+        dayTrainings.reduce((sum, log) => sum + log.minutes, 0) +
+        dayMovements.reduce((sum, log) => sum + log.durationMinutes, 0);
+      const stepsForDay = data.logs.movementDays.find(day => day.date === date)?.steps ?? 0;
+      return { date, minutes, steps: stepsForDay };
+    });
+    const totalMinutes = totals.reduce((sum, entry) => sum + entry.minutes, 0);
+    const averageMinutes = totals.length ? Math.round(totalMinutes / totals.length) : 0;
+    const peakSteps = totals.sort((a, b) => b.steps - a.steps)[0];
+    return {
+      averageMinutes,
+      peakSteps: peakSteps?.steps ? peakSteps : null,
+      coverage: Math.round((totals.filter(item => item.minutes > 0).length / 7) * 100)
+    };
+  }, [data.logs.movementDays, data.logs.movementSessions, data.logs.training, weeklyDates]);
+
+  const formatDayLabel = (iso: string) =>
+    new Date(iso).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' });
+
   return (
     <section className="space-y-4">
       <header className="space-y-2">
         <h1 className="text-2xl font-bold">Активность</h1>
         <p className="text-sm text-slate-500">
-          Управление тренировками, движением и дневной активностью.
+          Статистический хаб по движению: тренды нагрузок, паттерны активности и прогресс.
         </p>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <input
-            type="date"
-            className="input w-full sm:max-w-[220px]"
-            value={selectedDate}
-            onChange={event => setSelectedDate(event.target.value)}
-          />
-          <Link className="btn-secondary w-full sm:w-auto" to="/track">
-            Открыть полный трекер активности
+          <div className="flex flex-wrap gap-2">
+            {weeklyDates.map(date => (
+              <button
+                key={date}
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  selectedDate === date ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'
+                }`}
+                onClick={() => setSelectedDate(date)}
+              >
+                {formatDayLabel(date)}
+              </button>
+            ))}
+          </div>
+          <Link className="btn-secondary w-full sm:w-auto" to="/">
+            Внести факты за сегодня
           </Link>
         </div>
       </header>
@@ -145,29 +191,51 @@ const ActivityPage = () => {
           )}
         </div>
 
-        <div className="card p-4 space-y-3">
-          <h2 className="section-title">Движение и привычки</h2>
-          {movementSessions.length ? (
-            <div className="space-y-2">
-              {movementSessions.map(log => {
-                const activity = data.library.movementActivities.find(
-                  item => item.id === log.activityRef
-                );
-                return (
-                  <div key={log.id} className="rounded-xl border border-slate-200 p-3">
-                    <p className="text-sm font-semibold">
-                      {activity?.name ?? 'Активность'} · {log.durationMinutes} мин
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      Шаги: {log.steps ?? 0} · {log.distanceKm ?? 0} км
-                    </p>
-                  </div>
-                );
-              })}
+        <div className="space-y-3">
+          <div className="card p-4 space-y-3">
+            <h2 className="section-title">Инсайты недели</h2>
+            <div className="space-y-2 text-sm text-slate-600">
+              <p>
+                Средняя нагрузка: <span className="font-semibold">{weeklyMovement.averageMinutes}</span> мин
+                в день
+              </p>
+              <p>
+                День с максимумом шагов:{' '}
+                <span className="font-semibold">{weeklyMovement.peakSteps?.date ?? '—'}</span> ·{' '}
+                {weeklyMovement.peakSteps?.steps ?? '—'} шагов
+              </p>
+              <p>
+                Покрытие активности: <span className="font-semibold">{weeklyMovement.coverage}%</span>
+              </p>
+              <p className="text-xs text-slate-500">
+                Используйте пики и провалы для корректировки недельной нагрузки.
+              </p>
             </div>
-          ) : (
-            <p className="text-sm text-slate-500">Нет записей о движении.</p>
-          )}
+          </div>
+          <div className="card p-4 space-y-3">
+            <h2 className="section-title">Движение и привычки</h2>
+            {movementSessions.length ? (
+              <div className="space-y-2">
+                {movementSessions.map(log => {
+                  const activity = data.library.movementActivities.find(
+                    item => item.id === log.activityRef
+                  );
+                  return (
+                    <div key={log.id} className="rounded-xl border border-slate-200 p-3">
+                      <p className="text-sm font-semibold">
+                        {activity?.name ?? 'Активность'} · {log.durationMinutes} мин
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Шаги: {log.steps ?? 0} · {log.distanceKm ?? 0} км
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Нет записей о движении.</p>
+            )}
+          </div>
         </div>
       </div>
     </section>

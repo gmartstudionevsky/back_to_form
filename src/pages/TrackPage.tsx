@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { BottomSheet } from '../components/BottomSheet';
 import { useAppStore } from '../store/useAppStore';
 import { calcFoodEntry, calcMealPlanItem } from '../utils/nutrition';
@@ -88,6 +89,7 @@ const TrackPage = () => {
   const [sleepDraft, setSleepDraft] = useState<SleepLog | null>(null);
   const [drinkDraft, setDrinkDraft] = useState<DrinkLog | null>(null);
   const [movementSteps, setMovementSteps] = useState(0);
+  const isReadOnly = true;
   const defaultDrink = useMemo(
     () => data.library.drinks.find(item => item.id === 'drink-water') ?? data.library.drinks[0],
     [data.library.drinks]
@@ -669,13 +671,28 @@ const TrackPage = () => {
     (sum, log) => sum + log.durationMinutes,
     0
   );
+  const dayOptions = useMemo(() => {
+    const base = new Date(todayISO());
+    const options = Array.from({ length: 10 }, (_, index) => {
+      const date = new Date(base);
+      date.setDate(base.getDate() - index);
+      return date.toISOString().slice(0, 10);
+    });
+    if (!options.includes(selectedDate)) {
+      options.unshift(selectedDate);
+    }
+    return options;
+  }, [selectedDate]);
+
+  const formatDayLabel = (iso: string) =>
+    new Date(iso).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' });
 
   return (
     <section className="space-y-4">
       <header className="space-y-2">
-        <h1 className="text-2xl font-bold">Трекер</h1>
+        <h1 className="text-2xl font-bold">Архив дня</h1>
         <p className="text-sm text-slate-500">
-          Полный журнал событий — питание, активность и здоровье в одном месте.
+          Детальная статистика за выбранный день без ввода данных.
         </p>
         <div className="flex gap-2 overflow-x-auto pb-1">
           {tabs.map(tab => (
@@ -692,14 +709,23 @@ const TrackPage = () => {
         </div>
       </header>
 
-      <div className="card p-4">
-        <label className="text-sm font-semibold text-slate-600">Дата</label>
-        <input
-          type="date"
-          value={selectedDate}
-          onChange={event => setSelectedDate(event.target.value)}
-          className="input mt-2"
-        />
+      <div className="card p-4 space-y-3">
+        <div className="flex flex-wrap gap-2">
+          {dayOptions.map(date => (
+            <button
+              key={date}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                selectedDate === date ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'
+              }`}
+              onClick={() => setSelectedDate(date)}
+            >
+              {formatDayLabel(date)}
+            </button>
+          ))}
+        </div>
+        <Link className="btn-secondary w-full sm:w-auto" to="/">
+          Внести показатели в разделе «Сегодня»
+        </Link>
       </div>
 
       {active === 'Питание' && (
@@ -717,9 +743,11 @@ const TrackPage = () => {
           <div className="card p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="section-title">Итог дня</h2>
-              <button className="btn-primary w-full sm:w-auto" onClick={openNewFood}>
-                Добавить запись
-              </button>
+              {!isReadOnly && (
+                <button className="btn-primary w-full sm:w-auto" onClick={openNewFood}>
+                  Добавить запись
+                </button>
+              )}
             </div>
             <p className="mt-2 text-sm text-slate-600">
               Калории: {totals.kcal.toFixed(0)} | Б: {totals.protein.toFixed(1)} г | Ж:{' '}
@@ -752,29 +780,31 @@ const TrackPage = () => {
                           </p>
                           {renderNutritionTags(entry.nutritionTags)}
                         </div>
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                          <button
-                            className="btn-secondary w-full sm:w-auto"
-                            onClick={() =>
-                              setFoodSheet({
-                                ...entry,
-                                date: selectedDate,
-                                kcalOverrideText: entry.kcalOverride?.toString() ?? '',
-                                proteinOverrideText: entry.proteinOverride?.toString() ?? '',
-                                fatOverrideText: entry.fatOverride?.toString() ?? '',
-                                carbOverrideText: entry.carbOverride?.toString() ?? ''
-                              })
-                            }
-                          >
-                            Изменить
-                          </button>
-                          <button
-                            className="btn-secondary w-full text-red-500 sm:w-auto"
-                            onClick={() => deleteFoodEntry(selectedDate, entry.id)}
-                          >
-                            Удалить
-                          </button>
-                        </div>
+                        {!isReadOnly && (
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <button
+                              className="btn-secondary w-full sm:w-auto"
+                              onClick={() =>
+                                setFoodSheet({
+                                  ...entry,
+                                  date: selectedDate,
+                                  kcalOverrideText: entry.kcalOverride?.toString() ?? '',
+                                  proteinOverrideText: entry.proteinOverride?.toString() ?? '',
+                                  fatOverrideText: entry.fatOverride?.toString() ?? '',
+                                  carbOverrideText: entry.carbOverride?.toString() ?? ''
+                                })
+                              }
+                            >
+                              Изменить
+                            </button>
+                            <button
+                              className="btn-secondary w-full text-red-500 sm:w-auto"
+                              onClick={() => deleteFoodEntry(selectedDate, entry.id)}
+                            >
+                              Удалить
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -792,9 +822,11 @@ const TrackPage = () => {
               <h2 className="section-title">
                 Итог активности: {trainingLogs.reduce((sum, log) => sum + log.minutes, 0)} мин
               </h2>
-              <button className="btn-primary w-full sm:w-auto" onClick={() => openTraining()}>
-                Добавить тренировку
-              </button>
+              {!isReadOnly && (
+                <button className="btn-primary w-full sm:w-auto" onClick={() => openTraining()}>
+                  Добавить тренировку
+                </button>
+              )}
             </div>
             <p className="mt-2 text-sm text-slate-600">
               План: тренировки {plannedWorkoutCount}, движение {plannedMovementMinutes} мин
@@ -808,9 +840,11 @@ const TrackPage = () => {
           <div className="card p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="text-sm font-semibold text-slate-500">Тренировки</h3>
-              <button className="btn-secondary w-full sm:w-auto" onClick={() => openTraining()}>
-                Добавить
-              </button>
+              {!isReadOnly && (
+                <button className="btn-secondary w-full sm:w-auto" onClick={() => openTraining()}>
+                  Добавить
+                </button>
+              )}
             </div>
             <div className="mt-3 space-y-2">
               {trainingLogs.length === 0 ? (
@@ -831,17 +865,22 @@ const TrackPage = () => {
                           · {timeOfDayLabels[log.timeOfDay ?? getTimeOfDayFromDateTime(log.dateTime)]}
                         </p>
                       </div>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <button className="btn-secondary w-full sm:w-auto" onClick={() => openTraining(log)}>
-                          Изменить
-                        </button>
-                        <button
-                          className="btn-secondary w-full text-red-500 sm:w-auto"
-                          onClick={() => deleteTrainingLog(log.id)}
-                        >
-                          Удалить
-                        </button>
-                      </div>
+                      {!isReadOnly && (
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <button
+                            className="btn-secondary w-full sm:w-auto"
+                            onClick={() => openTraining(log)}
+                          >
+                            Изменить
+                          </button>
+                          <button
+                            className="btn-secondary w-full text-red-500 sm:w-auto"
+                            onClick={() => deleteTrainingLog(log.id)}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))
@@ -852,9 +891,11 @@ const TrackPage = () => {
           <div className="card space-y-4 p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="text-sm font-semibold text-slate-500">Движение</h3>
-              <button className="btn-secondary w-full sm:w-auto" onClick={() => openMovement()}>
-                Добавить вручную
-              </button>
+              {!isReadOnly && (
+                <button className="btn-secondary w-full sm:w-auto" onClick={() => openMovement()}>
+                  Добавить вручную
+                </button>
+              )}
             </div>
 
             <div className="rounded-2xl border border-slate-200 p-3 text-sm">
@@ -863,23 +904,29 @@ const TrackPage = () => {
                   <p className="font-semibold">Шаги за день</p>
                   <p className="text-xs text-slate-500">Факт: {movementSteps} шагов</p>
                 </div>
-                <button
-                  className="btn-primary w-full sm:w-auto"
-                  onClick={() => setMovementDayLog({ date: selectedDate, steps: movementSteps })}
-                >
-                  Сохранить шаги
-                </button>
+                {!isReadOnly && (
+                  <button
+                    className="btn-primary w-full sm:w-auto"
+                    onClick={() => setMovementDayLog({ date: selectedDate, steps: movementSteps })}
+                  >
+                    Сохранить шаги
+                  </button>
+                )}
               </div>
-              <input
-                type="number"
-                className="input mt-2"
-                value={movementSteps}
-                onChange={event => setMovementSteps(Number(event.target.value))}
-                placeholder="Количество шагов"
-              />
-              <p className="mt-2 text-xs text-slate-500">
-                Укажите итоговое количество шагов за день.
-              </p>
+              {!isReadOnly && (
+                <>
+                  <input
+                    type="number"
+                    className="input mt-2"
+                    value={movementSteps}
+                    onChange={event => setMovementSteps(Number(event.target.value))}
+                    placeholder="Количество шагов"
+                  />
+                  <p className="mt-2 text-xs text-slate-500">
+                    Укажите итоговое количество шагов за день.
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
@@ -913,17 +960,22 @@ const TrackPage = () => {
                             {timeOfDayLabels[log.timeOfDay ?? getTimeOfDayFromDateTime(log.dateTime)]}
                           </p>
                         </div>
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                          <button className="btn-secondary w-full sm:w-auto" onClick={() => openMovement(log)}>
-                            Изменить
-                          </button>
-                          <button
-                            className="btn-secondary w-full text-red-500 sm:w-auto"
-                            onClick={() => deleteMovementSessionLog(log.id)}
-                          >
-                            Удалить
-                          </button>
-                        </div>
+                        {!isReadOnly && (
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <button
+                              className="btn-secondary w-full sm:w-auto"
+                              onClick={() => openMovement(log)}
+                            >
+                              Изменить
+                            </button>
+                            <button
+                              className="btn-secondary w-full text-red-500 sm:w-auto"
+                              onClick={() => deleteMovementSessionLog(log.id)}
+                            >
+                              Удалить
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -939,9 +991,11 @@ const TrackPage = () => {
           <div className="card p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="section-title">Водный баланс</h2>
-              <button className="btn-primary w-full sm:w-auto" onClick={() => openDrink()}>
-                Добавить напиток
-              </button>
+              {!isReadOnly && (
+                <button className="btn-primary w-full sm:w-auto" onClick={() => openDrink()}>
+                  Добавить напиток
+                </button>
+              )}
             </div>
             <p className="mt-2 text-sm text-slate-600">
               Эквивалент воды: {hydrationEquivalent.toFixed(0)} мл · Цель:{' '}
@@ -955,98 +1009,100 @@ const TrackPage = () => {
             <p className={`text-xs ${getHydrationStatus(hydrationEquivalent, hydrationTargetMl).tone}`}>
               {getHydrationStatus(hydrationEquivalent, hydrationTargetMl).label}
             </p>
-            <div className="mt-4 rounded-2xl border border-slate-200 p-3">
-              <div className="grid gap-2 sm:grid-cols-[1.2fr_1fr_0.6fr_0.8fr_auto] sm:items-end">
-                <label className="text-xs text-slate-500">
-                  Напиток
-                  <select
-                    className="input mt-1"
-                    value={drinkForm.drinkId}
-                    onChange={event => {
-                      const nextId = event.target.value;
-                      const drink = data.library.drinks.find(item => item.id === nextId);
-                      const portion = drink?.portions[0];
-                      setDrinkForm(prev => ({
-                        ...prev,
-                        drinkId: nextId,
-                        portionLabel: portion?.label ?? '',
-                        portionMl: portion?.ml ?? 0
-                      }));
-                    }}
-                  >
-                    {data.library.drinks.map(drink => (
-                      <option key={drink.id} value={drink.id}>
-                        {drink.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-xs text-slate-500">
-                  Емкость
-                  <select
-                    className="input mt-1"
-                    value={drinkForm.portionLabel}
-                    onChange={event => {
-                      const drink = data.library.drinks.find(item => item.id === drinkForm.drinkId);
-                      const portion = drink?.portions.find(item => item.label === event.target.value);
-                      setDrinkForm(prev => ({
-                        ...prev,
-                        portionLabel: event.target.value,
-                        portionMl: portion?.ml ?? 0
-                      }));
-                    }}
-                  >
-                    {data.library.drinks
-                      .find(item => item.id === drinkForm.drinkId)
-                      ?.portions.map(portion => (
-                        <option key={portion.label} value={portion.label}>
-                          {portion.label}
+            {!isReadOnly && (
+              <div className="mt-4 rounded-2xl border border-slate-200 p-3">
+                <div className="grid gap-2 sm:grid-cols-[1.2fr_1fr_0.6fr_0.8fr_auto] sm:items-end">
+                  <label className="text-xs text-slate-500">
+                    Напиток
+                    <select
+                      className="input mt-1"
+                      value={drinkForm.drinkId}
+                      onChange={event => {
+                        const nextId = event.target.value;
+                        const drink = data.library.drinks.find(item => item.id === nextId);
+                        const portion = drink?.portions[0];
+                        setDrinkForm(prev => ({
+                          ...prev,
+                          drinkId: nextId,
+                          portionLabel: portion?.label ?? '',
+                          portionMl: portion?.ml ?? 0
+                        }));
+                      }}
+                    >
+                      {data.library.drinks.map(drink => (
+                        <option key={drink.id} value={drink.id}>
+                          {drink.name}
                         </option>
                       ))}
-                  </select>
-                </label>
-                <label className="text-xs text-slate-500">
-                  Порции
-                  <input
-                    type="number"
-                    min={1}
-                    className="input mt-1"
-                    value={drinkForm.portionsCount}
-                    onChange={event =>
-                      setDrinkForm(prev => ({ ...prev, portionsCount: Number(event.target.value) }))
-                    }
-                  />
-                </label>
-                <label className="text-xs text-slate-500">
-                  Время
-                  <input
-                    type="time"
-                    className="input mt-1"
-                    value={drinkForm.time}
-                    onChange={event => setDrinkForm(prev => ({ ...prev, time: event.target.value }))}
-                  />
-                </label>
-                <button
-                  className="btn-primary sm:mb-1"
-                  onClick={() => {
-                    if (!drinkForm.drinkId || !drinkForm.portionLabel || !drinkForm.portionMl) {
-                      return;
-                    }
-                    addDrinkLog({
-                      id: '',
-                      dateTime: toDateTime(selectedDate, drinkForm.time),
-                      drinkId: drinkForm.drinkId,
-                      portionLabel: drinkForm.portionLabel,
-                      portionMl: drinkForm.portionMl,
-                      portionsCount: drinkForm.portionsCount
-                    });
-                    setDrinkForm(prev => ({ ...prev, time: currentTimeString() }));
-                  }}
-                >
-                  Добавить
-                </button>
+                    </select>
+                  </label>
+                  <label className="text-xs text-slate-500">
+                    Емкость
+                    <select
+                      className="input mt-1"
+                      value={drinkForm.portionLabel}
+                      onChange={event => {
+                        const drink = data.library.drinks.find(item => item.id === drinkForm.drinkId);
+                        const portion = drink?.portions.find(item => item.label === event.target.value);
+                        setDrinkForm(prev => ({
+                          ...prev,
+                          portionLabel: event.target.value,
+                          portionMl: portion?.ml ?? 0
+                        }));
+                      }}
+                    >
+                      {data.library.drinks
+                        .find(item => item.id === drinkForm.drinkId)
+                        ?.portions.map(portion => (
+                          <option key={portion.label} value={portion.label}>
+                            {portion.label}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <label className="text-xs text-slate-500">
+                    Порции
+                    <input
+                      type="number"
+                      min={1}
+                      className="input mt-1"
+                      value={drinkForm.portionsCount}
+                      onChange={event =>
+                        setDrinkForm(prev => ({ ...prev, portionsCount: Number(event.target.value) }))
+                      }
+                    />
+                  </label>
+                  <label className="text-xs text-slate-500">
+                    Время
+                    <input
+                      type="time"
+                      className="input mt-1"
+                      value={drinkForm.time}
+                      onChange={event => setDrinkForm(prev => ({ ...prev, time: event.target.value }))}
+                    />
+                  </label>
+                  <button
+                    className="btn-primary sm:mb-1"
+                    onClick={() => {
+                      if (!drinkForm.drinkId || !drinkForm.portionLabel || !drinkForm.portionMl) {
+                        return;
+                      }
+                      addDrinkLog({
+                        id: '',
+                        dateTime: toDateTime(selectedDate, drinkForm.time),
+                        drinkId: drinkForm.drinkId,
+                        portionLabel: drinkForm.portionLabel,
+                        portionMl: drinkForm.portionMl,
+                        portionsCount: drinkForm.portionsCount
+                      });
+                      setDrinkForm(prev => ({ ...prev, time: currentTimeString() }));
+                    }}
+                  >
+                    Добавить
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
           <div className="card p-4">
             <h3 className="text-sm font-semibold text-slate-500">Напитки за день</h3>
@@ -1070,17 +1126,19 @@ const TrackPage = () => {
                             })}
                           </p>
                         </div>
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                          <button className="btn-secondary w-full sm:w-auto" onClick={() => openDrink(log)}>
-                            Изменить
-                          </button>
-                          <button
-                            className="btn-secondary w-full text-red-500 sm:w-auto"
-                            onClick={() => deleteDrinkLog(log.id)}
-                          >
-                            Удалить
-                          </button>
-                        </div>
+                        {!isReadOnly && (
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <button className="btn-secondary w-full sm:w-auto" onClick={() => openDrink(log)}>
+                              Изменить
+                            </button>
+                            <button
+                              className="btn-secondary w-full text-red-500 sm:w-auto"
+                              onClick={() => deleteDrinkLog(log.id)}
+                            >
+                              Удалить
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -1094,9 +1152,11 @@ const TrackPage = () => {
               <h2 className="section-title">
                 Курение · {smokingLogs.reduce((sum, log) => sum + log.count, 0)} шт
               </h2>
-              <button className="btn-primary w-full sm:w-auto" onClick={() => openSmoking()}>
-                Добавить
-              </button>
+              {!isReadOnly && (
+                <button className="btn-primary w-full sm:w-auto" onClick={() => openSmoking()}>
+                  Добавить
+                </button>
+              )}
             </div>
             <p className="mt-2 text-sm text-slate-600">
               Цель: {dayPlan?.requirements?.smokingTargetMax ?? '—'} шт
@@ -1112,17 +1172,22 @@ const TrackPage = () => {
                         <p className="text-sm font-semibold">{log.count} шт</p>
                         <p className="text-xs text-slate-500">Триггер: {log.trigger}</p>
                       </div>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <button className="btn-secondary w-full sm:w-auto" onClick={() => openSmoking(log)}>
-                          Изменить
-                        </button>
-                        <button
-                          className="btn-secondary w-full text-red-500 sm:w-auto"
-                          onClick={() => deleteSmokingLog(log.id)}
-                        >
-                          Удалить
-                        </button>
-                      </div>
+                      {!isReadOnly && (
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <button
+                            className="btn-secondary w-full sm:w-auto"
+                            onClick={() => openSmoking(log)}
+                          >
+                            Изменить
+                          </button>
+                          <button
+                            className="btn-secondary w-full text-red-500 sm:w-auto"
+                            onClick={() => deleteSmokingLog(log.id)}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))
@@ -1133,9 +1198,11 @@ const TrackPage = () => {
           <div className="card p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="section-title">Сон</h2>
-              <button className="btn-primary w-full sm:w-auto" onClick={() => openSleep()}>
-                Добавить
-              </button>
+              {!isReadOnly && (
+                <button className="btn-primary w-full sm:w-auto" onClick={() => openSleep()}>
+                  Добавить
+                </button>
+              )}
             </div>
             <div className="mt-2 flex flex-wrap gap-3 text-sm text-slate-600">
               <p>
@@ -1166,17 +1233,19 @@ const TrackPage = () => {
                           {log.notes ? ` · ${log.notes}` : ''}
                         </p>
                       </div>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <button className="btn-secondary w-full sm:w-auto" onClick={() => openSleep(log)}>
-                          Изменить
-                        </button>
-                        <button
-                          className="btn-secondary w-full text-red-500 sm:w-auto"
-                          onClick={() => deleteSleepLog(log.id)}
-                        >
-                          Удалить
-                        </button>
-                      </div>
+                      {!isReadOnly && (
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <button className="btn-secondary w-full sm:w-auto" onClick={() => openSleep(log)}>
+                            Изменить
+                          </button>
+                          <button
+                            className="btn-secondary w-full text-red-500 sm:w-auto"
+                            onClick={() => deleteSleepLog(log.id)}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))
@@ -1214,9 +1283,11 @@ const TrackPage = () => {
             <div className="card p-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="section-title">Вес</h2>
-                <button className="btn-primary w-full sm:w-auto" onClick={() => openWeight()}>
-                  Добавить
-                </button>
+                {!isReadOnly && (
+                  <button className="btn-primary w-full sm:w-auto" onClick={() => openWeight()}>
+                    Добавить
+                  </button>
+                )}
               </div>
               <div className="mt-2 space-y-2">
                 {weightLogs.length === 0 ? (
@@ -1226,17 +1297,19 @@ const TrackPage = () => {
                     <div key={log.id} className="rounded-xl border border-slate-200 p-3">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-sm font-semibold">{log.weightKg} кг</p>
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                          <button className="btn-secondary w-full sm:w-auto" onClick={() => openWeight(log)}>
-                            Изменить
-                          </button>
-                          <button
-                            className="btn-secondary w-full text-red-500 sm:w-auto"
-                            onClick={() => deleteWeightLog(log.id)}
-                          >
-                            Удалить
-                          </button>
-                        </div>
+                        {!isReadOnly && (
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <button className="btn-secondary w-full sm:w-auto" onClick={() => openWeight(log)}>
+                              Изменить
+                            </button>
+                            <button
+                              className="btn-secondary w-full text-red-500 sm:w-auto"
+                              onClick={() => deleteWeightLog(log.id)}
+                            >
+                              Удалить
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))
@@ -1246,9 +1319,11 @@ const TrackPage = () => {
             <div className="card p-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="section-title">Талия</h2>
-                <button className="btn-primary w-full sm:w-auto" onClick={() => openWaist()}>
-                  Добавить
-                </button>
+                {!isReadOnly && (
+                  <button className="btn-primary w-full sm:w-auto" onClick={() => openWaist()}>
+                    Добавить
+                  </button>
+                )}
               </div>
               <div className="mt-2 space-y-2">
                 {waistLogs.length === 0 ? (
@@ -1258,17 +1333,19 @@ const TrackPage = () => {
                     <div key={log.id} className="rounded-xl border border-slate-200 p-3">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-sm font-semibold">{log.waistCm} см</p>
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                          <button className="btn-secondary w-full sm:w-auto" onClick={() => openWaist(log)}>
-                            Изменить
-                          </button>
-                          <button
-                            className="btn-secondary w-full text-red-500 sm:w-auto"
-                            onClick={() => deleteWaistLog(log.id)}
-                          >
-                            Удалить
-                          </button>
-                        </div>
+                        {!isReadOnly && (
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <button className="btn-secondary w-full sm:w-auto" onClick={() => openWaist(log)}>
+                              Изменить
+                            </button>
+                            <button
+                              className="btn-secondary w-full text-red-500 sm:w-auto"
+                              onClick={() => deleteWaistLog(log.id)}
+                            >
+                              Удалить
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))
@@ -1279,13 +1356,14 @@ const TrackPage = () => {
         </div>
       )}
 
-      <BottomSheet
-        open={Boolean(foodSheet)}
-        title={foodSheet?.id ? 'Редактировать питание' : 'Добавить питание'}
-        onClose={() => setFoodSheet(null)}
-      >
-        {foodSheet && (
-          <>
+      {!isReadOnly && (
+        <BottomSheet
+          open={Boolean(foodSheet)}
+          title={foodSheet?.id ? 'Редактировать питание' : 'Добавить питание'}
+          onClose={() => setFoodSheet(null)}
+        >
+          {foodSheet && (
+            <>
             <label className="text-sm font-semibold text-slate-600">Тип записи</label>
             <select
               className="input"
@@ -1546,17 +1624,19 @@ const TrackPage = () => {
             <button className="btn-primary w-full" onClick={saveFood}>
               Сохранить
             </button>
-          </>
-        )}
-      </BottomSheet>
+            </>
+          )}
+        </BottomSheet>
+      )}
 
-      <BottomSheet
-        open={Boolean(trainingDraft)}
-        title={trainingDraft?.id ? 'Редактировать тренировку' : 'Добавить тренировку'}
-        onClose={() => setTrainingDraft(null)}
-      >
-        {trainingDraft && (
-          <>
+      {!isReadOnly && (
+        <BottomSheet
+          open={Boolean(trainingDraft)}
+          title={trainingDraft?.id ? 'Редактировать тренировку' : 'Добавить тренировку'}
+          onClose={() => setTrainingDraft(null)}
+        >
+          {trainingDraft && (
+            <>
             <label className="text-sm font-semibold text-slate-600">Минуты</label>
             <input
               type="number"
@@ -1610,17 +1690,19 @@ const TrackPage = () => {
             <button className="btn-primary w-full" onClick={saveTraining}>
               Сохранить
             </button>
-          </>
-        )}
-      </BottomSheet>
+            </>
+          )}
+        </BottomSheet>
+      )}
 
-      <BottomSheet
-        open={Boolean(movementDraft)}
-        title={movementDraft?.id ? 'Редактировать движение' : 'Добавить движение'}
-        onClose={() => setMovementDraft(null)}
-      >
-        {movementDraft && (
-          <>
+      {!isReadOnly && (
+        <BottomSheet
+          open={Boolean(movementDraft)}
+          title={movementDraft?.id ? 'Редактировать движение' : 'Добавить движение'}
+          onClose={() => setMovementDraft(null)}
+        >
+          {movementDraft && (
+            <>
             <label className="text-sm font-semibold text-slate-600">Активность</label>
             <select
               className="input"
@@ -1717,17 +1799,19 @@ const TrackPage = () => {
             <button className="btn-primary w-full" onClick={saveMovement}>
               Сохранить
             </button>
-          </>
-        )}
-      </BottomSheet>
+            </>
+          )}
+        </BottomSheet>
+      )}
 
-      <BottomSheet
-        open={Boolean(smokingDraft)}
-        title={smokingDraft?.id ? 'Редактировать курение' : 'Добавить курение'}
-        onClose={() => setSmokingDraft(null)}
-      >
-        {smokingDraft && (
-          <>
+      {!isReadOnly && (
+        <BottomSheet
+          open={Boolean(smokingDraft)}
+          title={smokingDraft?.id ? 'Редактировать курение' : 'Добавить курение'}
+          onClose={() => setSmokingDraft(null)}
+        >
+          {smokingDraft && (
+            <>
             <label className="text-sm font-semibold text-slate-600">Количество</label>
             <input
               type="number"
@@ -1789,17 +1873,19 @@ const TrackPage = () => {
             <button className="btn-primary w-full" onClick={saveSmoking}>
               Сохранить
             </button>
-          </>
-        )}
-      </BottomSheet>
+            </>
+          )}
+        </BottomSheet>
+      )}
 
-      <BottomSheet
-        open={Boolean(weightDraft)}
-        title={weightDraft?.id ? 'Редактировать вес' : 'Добавить вес'}
-        onClose={() => setWeightDraft(null)}
-      >
-        {weightDraft && (
-          <>
+      {!isReadOnly && (
+        <BottomSheet
+          open={Boolean(weightDraft)}
+          title={weightDraft?.id ? 'Редактировать вес' : 'Добавить вес'}
+          onClose={() => setWeightDraft(null)}
+        >
+          {weightDraft && (
+            <>
             <label className="text-sm font-semibold text-slate-600">Вес (кг)</label>
             <input
               type="number"
@@ -1825,17 +1911,19 @@ const TrackPage = () => {
             <button className="btn-primary w-full" onClick={saveWeight}>
               Сохранить
             </button>
-          </>
-        )}
-      </BottomSheet>
+            </>
+          )}
+        </BottomSheet>
+      )}
 
-      <BottomSheet
-        open={Boolean(waistDraft)}
-        title={waistDraft?.id ? 'Редактировать талию' : 'Добавить талию'}
-        onClose={() => setWaistDraft(null)}
-      >
-        {waistDraft && (
-          <>
+      {!isReadOnly && (
+        <BottomSheet
+          open={Boolean(waistDraft)}
+          title={waistDraft?.id ? 'Редактировать талию' : 'Добавить талию'}
+          onClose={() => setWaistDraft(null)}
+        >
+          {waistDraft && (
+            <>
             <label className="text-sm font-semibold text-slate-600">Талия (см)</label>
             <input
               type="number"
@@ -1859,17 +1947,19 @@ const TrackPage = () => {
             <button className="btn-primary w-full" onClick={saveWaist}>
               Сохранить
             </button>
-          </>
-        )}
-      </BottomSheet>
+            </>
+          )}
+        </BottomSheet>
+      )}
 
-      <BottomSheet
-        open={Boolean(sleepDraft)}
-        title={sleepDraft?.id ? 'Редактировать сон' : 'Добавить сон'}
-        onClose={() => setSleepDraft(null)}
-      >
-        {sleepDraft && (
-          <>
+      {!isReadOnly && (
+        <BottomSheet
+          open={Boolean(sleepDraft)}
+          title={sleepDraft?.id ? 'Редактировать сон' : 'Добавить сон'}
+          onClose={() => setSleepDraft(null)}
+        >
+          {sleepDraft && (
+            <>
             <label className="text-sm font-semibold text-slate-600">Дата</label>
             <input
               type="date"
@@ -1935,17 +2025,19 @@ const TrackPage = () => {
             <button className="btn-primary w-full" onClick={saveSleep}>
               Сохранить
             </button>
-          </>
-        )}
-      </BottomSheet>
+            </>
+          )}
+        </BottomSheet>
+      )}
 
-      <BottomSheet
-        open={Boolean(drinkDraft)}
-        title={drinkDraft?.id ? 'Редактировать напиток' : 'Добавить напиток'}
-        onClose={() => setDrinkDraft(null)}
-      >
-        {drinkDraft && (
-          <>
+      {!isReadOnly && (
+        <BottomSheet
+          open={Boolean(drinkDraft)}
+          title={drinkDraft?.id ? 'Редактировать напиток' : 'Добавить напиток'}
+          onClose={() => setDrinkDraft(null)}
+        >
+          {drinkDraft && (
+            <>
             <label className="text-sm font-semibold text-slate-600">Напиток</label>
             <select
               className="input"
@@ -2018,9 +2110,10 @@ const TrackPage = () => {
             <button className="btn-primary w-full" onClick={saveDrink}>
               Сохранить
             </button>
-          </>
-        )}
-      </BottomSheet>
+            </>
+          )}
+        </BottomSheet>
+      )}
     </section>
   );
 };

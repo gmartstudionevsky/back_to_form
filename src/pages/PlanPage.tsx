@@ -966,6 +966,20 @@ const PlanPage = () => {
     return Array.from(map.values()).sort((a, b) => b.grams - a.grams);
   }, [data.library.products, data.library.recipes, periodPlans, selectedPeriod]);
 
+  const deleteDayPlan = () => {
+    if (!editorDate) return;
+    const confirmed = window.confirm(`Удалить план на ${editorDate}? Данные дня будут потеряны.`);
+    if (!confirmed) return;
+    updateData(state => ({
+      ...state,
+      planner: {
+        ...state.planner,
+        dayPlans: state.planner.dayPlans.filter(plan => plan.date !== editorDate)
+      }
+    }));
+    setEditorDate(null);
+  };
+
   return (
     <section className="space-y-4">
       <header className="space-y-2">
@@ -1533,7 +1547,15 @@ const PlanPage = () => {
 
           {dayPlan ? (
             <div className="card p-4 space-y-4">
-              <h2 className="section-title">Редактор дня · {editorDate}</h2>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="section-title">Редактор дня · {editorDate}</h2>
+                <button
+                  className="btn-secondary w-full text-rose-600 sm:w-auto"
+                  onClick={deleteDayPlan}
+                >
+                  Удалить план дня
+                </button>
+              </div>
 
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold">Требования</h3>

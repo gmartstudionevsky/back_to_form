@@ -92,10 +92,12 @@ const NutritionPage = () => {
     carb: dayPlan?.nutritionTargets?.carb ?? plannedTotals.carb
   };
 
+  const weeklyDays = useMemo(() => {
+    return data.logs.foodDays.filter(day => day.date <= selectedDate).slice(-7);
+  }, [data.logs.foodDays, selectedDate]);
+
   const weeklyAverage = useMemo(() => {
-    const lastDays = data.logs.foodDays
-      .filter(day => day.date <= selectedDate)
-      .slice(-7);
+    const lastDays = weeklyDays;
     if (!lastDays.length) return 0;
     const sum = lastDays.reduce((total, day) => {
       const entries = day.entries ?? [];
@@ -105,7 +107,38 @@ const NutritionPage = () => {
       );
     }, 0);
     return Math.round(sum / lastDays.length);
-  }, [data.library, data.logs.foodDays, selectedDate]);
+  }, [data.library, selectedDate, weeklyDays]);
+
+  const weeklyPeak = useMemo(() => {
+    if (!weeklyDays.length) return null;
+    return weeklyDays
+      .map(day => ({
+        date: day.date,
+        kcal: (day.entries ?? []).reduce(
+          (sum, entry) => sum + calcFoodEntry(entry, data.library).kcal,
+          0
+        )
+      }))
+      .sort((a, b) => b.kcal - a.kcal)[0];
+  }, [data.library, weeklyDays]);
+
+  const weeklyCoverage = Math.round((weeklyDays.length / 7) * 100);
+
+  const dayOptions = useMemo(() => {
+    const base = new Date(todayISO());
+    const options = Array.from({ length: 10 }, (_, index) => {
+      const date = new Date(base);
+      date.setDate(base.getDate() - index);
+      return date.toISOString().slice(0, 10);
+    });
+    if (!options.includes(selectedDate)) {
+      options.unshift(selectedDate);
+    }
+    return options;
+  }, [selectedDate]);
+
+  const formatDayLabel = (iso: string) =>
+    new Date(iso).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' });
 
   const mealSummary = useMemo(() => {
     const entries = foodDay?.entries ?? [];
@@ -125,17 +158,24 @@ const NutritionPage = () => {
       <header className="space-y-2">
         <h1 className="text-2xl font-bold">Питание</h1>
         <p className="text-sm text-slate-500">
-          Управление рационом, балансом и качеством питания по дням.
+          Статистический хаб по рациону: прогресс, паттерны питания и динамика по дням.
         </p>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <input
-            type="date"
-            className="input w-full sm:max-w-[220px]"
-            value={selectedDate}
-            onChange={event => setSelectedDate(event.target.value)}
-          />
-          <Link className="btn-secondary w-full sm:w-auto" to="/track">
-            Открыть полный трекер питания
+          <div className="flex flex-wrap gap-2">
+            {dayOptions.map(date => (
+              <button
+                key={date}
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  selectedDate === date ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'
+                }`}
+                onClick={() => setSelectedDate(date)}
+              >
+                {formatDayLabel(date)}
+              </button>
+            ))}
+          </div>
+          <Link className="btn-secondary w-full sm:w-auto" to="/">
+            Внести факты за сегодня
           </Link>
         </div>
       </header>
@@ -227,26 +267,43 @@ const NutritionPage = () => {
           )}
         </div>
 
-        <div className="card p-4 space-y-3">
-          <h2 className="section-title">План и ориентиры</h2>
-          <div className="space-y-2 text-sm text-slate-600">
-            <p>
-              План по калориям: <span className="font-semibold">{formatNumber(plannedTotals.kcal)}</span>
-            </p>
-            <p>
-              План БЖУ: Б {formatNumber(plannedTotals.protein)} · Ж{' '}
-              {formatNumber(plannedTotals.fat)} · У {formatNumber(plannedTotals.carb)}
-            </p>
-            <p>
-              Приёмов запланировано: <span className="font-semibold">{mealCompletion.total}</span>
-            </p>
-            <p className="text-xs text-slate-500">
-              Используйте планирование для распределения приёмов пищи на неделю.
-            </p>
+        <div className="space-y-3">
+          <div className="card p-4 space-y-3">
+            <h2 className="section-title">Инсайты недели</h2>
+            <div className="space-y-2 text-sm text-slate-600">
+              <p>
+                Покрытие дневниками: <span className="font-semibold">{weeklyCoverage}%</span>
+              </p>
+              <p>
+                Пиковый день: <span className="font-semibold">{weeklyPeak?.date ?? '—'}</span> ·{' '}
+                {weeklyPeak ? `${formatNumber(weeklyPeak.kcal)} ккал` : '—'}
+              </p>
+              <p>
+                План по калориям: <span className="font-semibold">{formatNumber(plannedTotals.kcal)}</span>
+              </p>
+              <p className="text-xs text-slate-500">
+                Сравнивайте пики и провалы, чтобы корректировать недельное планирование.
+              </p>
+            </div>
           </div>
-          <Link className="btn-primary w-full" to="/plan">
-            Открыть планирование
-          </Link>
+          <div className="card p-4 space-y-3">
+            <h2 className="section-title">План и ориентиры</h2>
+            <div className="space-y-2 text-sm text-slate-600">
+              <p>
+                План БЖУ: Б {formatNumber(plannedTotals.protein)} · Ж{' '}
+                {formatNumber(plannedTotals.fat)} · У {formatNumber(plannedTotals.carb)}
+              </p>
+              <p>
+                Приёмов запланировано: <span className="font-semibold">{mealCompletion.total}</span>
+              </p>
+              <p className="text-xs text-slate-500">
+                Используйте планирование для распределения приёмов пищи на неделю.
+              </p>
+            </div>
+            <Link className="btn-primary w-full" to="/plan">
+              Открыть планирование
+            </Link>
+          </div>
         </div>
       </div>
     </section>
