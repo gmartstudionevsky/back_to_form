@@ -178,8 +178,18 @@ const TrackPage = () => {
     activityCoefficient
   };
 
-  const estimateTraining = (log: { minutes: number; sets?: number; reps?: number }) =>
-    calcTrainingActivityMetrics(log as ActivityLog, activityDefaults, activityContext).calories;
+  const estimateTraining = (log: {
+    minutes: number;
+    sets?: number;
+    reps?: number;
+    protocolRef?: string;
+  }) =>
+    calcTrainingActivityMetrics(log as ActivityLog, activityDefaults, activityContext, {
+      protocol: log.protocolRef
+        ? data.library.protocols.find(item => item.id === log.protocolRef)
+        : undefined,
+      exercises: data.library.exercises
+    }).calories;
 
   const estimateMovement = (log: MovementSessionLog) => {
     const activity = data.library.movementActivities.find(item => item.id === log.activityRef);
@@ -207,11 +217,22 @@ const TrackPage = () => {
     log => log.dateTime.slice(0, 10) === selectedDate
   );
   const activityDefaults = resolveActivityDefaults(data.library.activityDefaults);
+  const resolveTrainingProtocol = (log: ActivityLog) =>
+    log.protocolRef
+      ? data.library.protocols.find(item => item.id === log.protocolRef)
+      : undefined;
+
   const activityCoefficient = [
-    trainingLogs.reduce(
-      (sum, log) => sum + calcTrainingActivityMetrics(log, activityDefaults).coefficient,
-      0
-    ),
+    trainingLogs.reduce((sum, log) => {
+      const protocol = resolveTrainingProtocol(log);
+      return (
+        sum +
+        calcTrainingActivityMetrics(log, activityDefaults, {}, {
+          protocol,
+          exercises: data.library.exercises
+        }).coefficient
+      );
+    }, 0),
     movementSessions.reduce((sum, log) => {
       const activity = data.library.movementActivities.find(item => item.id === log.activityRef);
       return (

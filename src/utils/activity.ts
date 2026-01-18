@@ -113,12 +113,25 @@ const calcAdjustedCalories = (
   );
 };
 
+type TrainingMetricsOptions = {
+  protocol?: Protocol;
+  exercises?: Exercise[];
+};
+
 export const calcTrainingActivityMetrics = (
   log: ActivityLog,
   defaults: ActivityDefaults,
-  context: ActivityCaloriesContext = {}
+  context: ActivityCaloriesContext = {},
+  options: TrainingMetricsOptions = {}
 ) => {
-  const coefficient = calcTrainingLogCoefficient(log, defaults);
+  const coefficient = options.protocol
+    ? calcProtocolCoefficient(
+        options.protocol,
+        options.exercises ?? [],
+        defaults,
+        log.minutes
+      )
+    : calcTrainingLogCoefficient(log, defaults);
   const calories = calcAdjustedCalories(coefficient, defaults.kcal, context);
   return { coefficient, calories };
 };
