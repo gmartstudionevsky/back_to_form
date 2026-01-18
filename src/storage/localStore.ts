@@ -238,6 +238,56 @@ export const loadData = (): AppData => {
           }
         }));
       }
+      if (!parsed.schemaVersion || parsed.schemaVersion < 9) {
+        const activityDefaults = seedData.library.activityDefaults;
+        migrated.library.activityDefaults =
+          migrated.library.activityDefaults ?? parsed.library?.activityDefaults ?? activityDefaults;
+        migrated.library.exercises = (migrated.library.exercises ?? parsed.library?.exercises ?? []).map(exercise => ({
+          ...exercise,
+          activityMetrics:
+            exercise.activityMetrics ??
+            (activityDefaults
+              ? {
+                  perMinute: activityDefaults.workoutPerMinute,
+                  base: activityDefaults.exerciseBase
+                }
+              : undefined)
+        }));
+        migrated.library.movementActivities = (migrated.library.movementActivities ??
+          parsed.library?.movementActivities ??
+          []).map(
+          activity => {
+            const seedMatch = seedData.library.movementActivities.find(
+              seedActivity => seedActivity.id === activity.id || seedActivity.kind === activity.kind
+            );
+            return {
+              ...activity,
+              activityMetrics: activity.activityMetrics ?? seedMatch?.activityMetrics
+            };
+          }
+        );
+        migrated.planner.dayPlans = (parsed.planner?.dayPlans ?? []).map(plan => ({
+          ...plan,
+          activityTargets: plan.activityTargets ?? {}
+        }));
+      }
+      if (!parsed.schemaVersion || parsed.schemaVersion < 10) {
+        migrated.library.activityDefaults = {
+          ...seedData.library.activityDefaults,
+          ...(migrated.library.activityDefaults ?? parsed.library?.activityDefaults ?? {})
+        };
+        migrated.logs.training = (migrated.logs.training ?? parsed.logs?.training ?? []).map(log => ({
+          ...log,
+          sets: log.sets ?? undefined,
+          reps: log.reps ?? undefined,
+          calories: log.calories ?? undefined
+        }));
+        migrated.logs.movementSessions = (migrated.logs.movementSessions ?? parsed.logs?.movementSessions ?? []).map(log => ({
+          ...log,
+          steps: log.steps ?? undefined,
+          calories: log.calories ?? undefined
+        }));
+      }
       return migrated;
     }
     return parsed;

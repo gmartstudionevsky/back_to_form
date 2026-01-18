@@ -6,6 +6,14 @@ import { useAppStore } from '../store/useAppStore';
 import { combineDateTime, currentTimeString, formatDate, todayISO } from '../utils/date';
 import { calcFoodEntry, calcMealPlanItem, calcRecipeNutrition } from '../utils/nutrition';
 import {
+  calcMovementSessionCoefficient,
+  calcPlannedWorkoutCoefficient,
+  calcProtocolDurationMinutes,
+  calcStepsCoefficient,
+  calcTrainingLogCoefficient,
+  resolveActivityDefaults
+} from '../utils/activity';
+import {
   FoodEntry,
   GeoPoint,
   MealComponent,
@@ -129,6 +137,9 @@ const TodayPage = () => {
   });
   const [trainingForm, setTrainingForm] = useState({
     minutes: 45,
+    sets: 0,
+    reps: 0,
+    calories: 0,
     time: currentTimeString()
   });
   const [movementDraft, setMovementDraft] = useState<MovementSessionLog | null>(null);
@@ -138,6 +149,7 @@ const TodayPage = () => {
   const [movementPlannedFlights, setMovementPlannedFlights] = useState(10);
   const [movementSteps, setMovementSteps] = useState(0);
   const [movementDurationMinutes, setMovementDurationMinutes] = useState(20);
+  const [movementCalories, setMovementCalories] = useState(0);
   const [movementTimer, setMovementTimer] = useState({
     running: false,
     startedAt: 0,
@@ -217,6 +229,34 @@ const TodayPage = () => {
     const sign = delta > 0 ? '+' : '';
     return `${sign}${delta.toFixed(0)}`;
   };
+  const formatDeltaFloat = (actual: number, target?: number, digits = 2) => {
+    if (target === undefined) return '—';
+    const delta = actual - target;
+    const sign = delta > 0 ? '+' : '';
+    return `${sign}${delta.toFixed(digits)}`;
+  };
+  const getProgressStatus = (actual: number, target?: number) => {
+    if (!target) {
+      return { percent: 0, label: 'План не задан', tone: 'text-slate-400' };
+    }
+    const ratio = actual / target;
+    const percent = Math.round(ratio * 100);
+    if (ratio >= 1.05) {
+      return {
+        percent,
+        label: `Перевыполнение +${Math.round((ratio - 1) * 100)}%`,
+        tone: 'text-emerald-500'
+      };
+    }
+    if (ratio >= 1) {
+      return { percent, label: 'План выполнен', tone: 'text-emerald-500' };
+    }
+    return {
+      percent,
+      label: `Недобор ${Math.round((1 - ratio) * 100)}%`,
+      tone: 'text-amber-500'
+    };
+  };
 
   const movementSessions = data.logs.movementSessions.filter(
     log => log.dateTime.slice(0, 10) === selectedDate
@@ -225,6 +265,22 @@ const TodayPage = () => {
   const movementDay = data.logs.movementDays.find(day => day.date === selectedDate);
   const movementDaySteps = movementDay?.steps;
   const trainingLogs = data.logs.training.filter(log => log.dateTime.slice(0, 10) === selectedDate);
+  const activityDefaults = resolveActivityDefaults(data.library.activityDefaults);
+  const movementDistanceKm = movementSessions.reduce(
+    (sum, log) => sum + (log.distanceKm ?? 0),
+    0
+  );
+  const trainingMinutes = trainingLogs.reduce((sum, log) => sum + log.minutes, 0);
+  const activityCoefficient = [
+    trainingLogs.reduce((sum, log) => sum + calcTrainingLogCoefficient(log, activityDefaults), 0),
+    movementSessions.reduce((sum, log) => {
+      const activity = data.library.movementActivities.find(item => item.id === log.activityRef);
+      return sum + calcMovementSessionCoefficient(log, activity, activityDefaults, {
+        includeSteps: !movementDaySteps
+      });
+    }, 0),
+    calcStepsCoefficient(movementDaySteps ?? 0, activityDefaults)
+  ].reduce((sum, value) => sum + value, 0);
   const cigaretteCount = data.logs.smoking
     .filter(log => log.dateTime.slice(0, 10) === selectedDate)
     .reduce((sum, log) => sum + log.count, 0);
@@ -242,6 +298,7 @@ const TodayPage = () => {
     .filter(log => log.dateTime.slice(0, 10) === selectedDate)
     .slice(-1)[0]?.weightKg;
   const lastWaist = data.logs.waist.filter(log => log.date === selectedDate).slice(-1)[0]?.waistCm;
+  const activityTargets = dayPlan?.activityTargets ?? {};
   const moveDate = (days: number) => {
     const date = new Date(selectedDate);
     date.setDate(date.getDate() + days);
@@ -527,6 +584,47 @@ const TodayPage = () => {
     data.library.movementActivities.find(item => item.kind === 'march')?.id ??
     data.library.movementActivities[0]?.id ??
     '';
+  const plannedTrainingMinutes = plannedTraining.reduce((sum, item) => {
+    const protocol = data.library.protocols.find(
+      protocolItem => protocolItem.id === item.protocolRef
+    );
+    const plannedMinutes = item.plannedMinutes ?? calcProtocolDurationMinutes(protocol) ?? 0;
+    return sum + plannedMinutes;
+  }, 0);
+  const plannedMovementMinutes = plannedMovementItems.reduce(
+    (sum, item) => sum + (item.plannedMinutes ?? 0),
+    0
+  );
+  const plannedActivityCoefficient =
+    plannedWorkouts.reduce((sum, item) => {
+      const protocol = data.library.protocols.find(
+        protocolItem => protocolItem.id === item.protocolRef
+      );
+      const movementActivity = data.library.movementActivities.find(
+        activity => activity.id === item.movementActivityRef
+      );
+      return (
+        sum +
+        calcPlannedWorkoutCoefficient(
+          item,
+          protocol,
+          data.library.exercises,
+          activityDefaults,
+          movementActivity
+        )
+      );
+    }, 0) +
+    calcStepsCoefficient(activityTargets.steps ?? dayPlan?.plannedSteps ?? 0, activityDefaults);
+  const activityCoefficientTarget =
+    activityTargets.coefficient ??
+    (plannedActivityCoefficient ? plannedActivityCoefficient : undefined);
+  const trainingMinutesTarget =
+    activityTargets.trainingMinutes ?? (plannedTrainingMinutes || undefined);
+  const movementMinutesTarget =
+    activityTargets.movementMinutes ?? (plannedMovementMinutes || undefined);
+  const stepsTarget = activityTargets.steps ?? dayPlan?.plannedSteps;
+  const distanceTarget = activityTargets.distanceKm;
+  const activityProgress = getProgressStatus(activityCoefficient, activityCoefficientTarget);
 
   useEffect(() => {
     setMovementSteps(movementDay?.steps ?? 0);
@@ -633,6 +731,7 @@ const TodayPage = () => {
       activityRef: movementActivityId,
       durationMinutes,
       distanceKm,
+      calories: movementCalories || undefined,
       startLocation: movementStartLocation ?? undefined,
       endLocation: endLocation ?? undefined,
       plannedFlights: activity?.kind === 'stairs' ? movementPlannedFlights : undefined,
@@ -985,11 +1084,35 @@ const TodayPage = () => {
             </p>
           </div>
           <div className="rounded-xl bg-slate-50 p-3">
-            <p className="text-xs uppercase text-slate-400">Движение</p>
+            <p className="text-xs uppercase text-slate-400">Активность</p>
             <p className="text-lg font-semibold">
-              {movementDaySteps ? `${movementDaySteps} шагов` : '—'}
+              {activityCoefficient.toFixed(2)} /{' '}
+              {activityCoefficientTarget !== undefined
+                ? activityCoefficientTarget.toFixed(2)
+                : '—'}{' '}
+              коэф.
             </p>
-            <p className="text-xs text-slate-400">{movementMinutes} мин активности</p>
+            <p className={`text-xs ${activityProgress.tone}`}>{activityProgress.label}</p>
+            <p className="text-[11px] text-slate-400">
+              Тренировки: {trainingMinutes} мин / {trainingMinutesTarget ?? '—'} ·
+              Движение: {movementMinutes} мин / {movementMinutesTarget ?? '—'}
+            </p>
+            <p className="text-[11px] text-slate-400">
+              Шаги: {movementDaySteps ?? 0} / {stepsTarget ?? '—'} · Δ коэф{' '}
+              {formatDeltaFloat(activityCoefficient, activityCoefficientTarget)}
+            </p>
+            {movementDistanceKm || distanceTarget ? (
+              <p className="text-[11px] text-slate-400">
+                Дистанция: {movementDistanceKm.toFixed(1)} км / {distanceTarget ?? '—'}
+              </p>
+            ) : null}
+            {(activityCoefficientTarget !== undefined || kcalTarget !== undefined) && (
+              <p className="text-[11px] text-slate-400">
+                Маркер баланса: активность{' '}
+                {formatDeltaFloat(activityCoefficient, activityCoefficientTarget)} · ккал{' '}
+                {formatDelta(totals.kcal, kcalTarget)}
+              </p>
+            )}
           </div>
           <div className="rounded-xl bg-slate-50 p-3">
             <p className="text-xs uppercase text-slate-400">Сигареты</p>
@@ -1037,7 +1160,7 @@ const TodayPage = () => {
             />
           </div>
         </div>
-        <div className="grid gap-2 text-xs text-slate-500 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-2 text-xs text-slate-500 sm:grid-cols-2 lg:grid-cols-6">
           <div className="rounded-xl bg-slate-50 p-3">
             <p className="uppercase text-[10px]">Питание</p>
             <p className="text-sm font-semibold text-slate-700">
@@ -1069,6 +1192,16 @@ const TodayPage = () => {
             </p>
           </div>
           <div className="rounded-xl bg-slate-50 p-3">
+            <p className="uppercase text-[10px]">Активность</p>
+            <p className="text-sm font-semibold text-slate-700">
+              {activityCoefficient.toFixed(2)}
+              {activityCoefficientTarget !== undefined
+                ? ` / ${activityCoefficientTarget.toFixed(2)}`
+                : ''}
+            </p>
+            <p className={`text-[11px] ${activityProgress.tone}`}>{activityProgress.label}</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-3">
             <p className="uppercase text-[10px]">Сигареты</p>
             <p className="text-sm font-semibold text-slate-700">
               {cigaretteCount}/{requirements?.smokingTargetMax ?? '—'}
@@ -1095,7 +1228,6 @@ const TodayPage = () => {
                 <div className="space-y-2">
                   {items.map(item => {
                     if (item.kind === 'workout-plan') {
-                      const session = plannedWorkouts.find(workout => workout.id === item.id);
                       return (
                         <div
                           key={item.id}
@@ -1139,100 +1271,6 @@ const TodayPage = () => {
                                 : ''}
                             </p>
                           </div>
-                          {dayPlan ? (
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                              <label className="text-xs text-slate-500">
-                                Время
-                                <input
-                                  type="time"
-                                  className="input input-time mt-1 w-32"
-                                  value={item.time}
-                                  onChange={event => updateWorkoutTime(item.id, event.target.value)}
-                                />
-                              </label>
-                              <div className="control-row">
-                                {!item.completed ? (
-                                  item.isMovement ? (
-                                    <button
-                                      className="btn-secondary w-full sm:w-auto"
-                                      onClick={() => {
-                                        const minutes = session?.plannedMinutes ?? 10;
-                                        addMovementSessionLog({
-                                          id: '',
-                                          dateTime: toDateTime(selectedDate),
-                                          activityRef:
-                                            session?.movementActivityRef ??
-                                            defaultMovementActivityId,
-                                          durationMinutes: minutes,
-                                          timeOfDay: getTimeOfDayFromDateTime(new Date().toISOString())
-                                        });
-                                        updateData(state => {
-                                          const plan = state.planner.dayPlans.find(
-                                            planItem => planItem.date === selectedDate
-                                          );
-                                          if (!plan) return { ...state };
-                                          plan.workoutsPlan = plan.workoutsPlan.map(planItem =>
-                                            planItem.id === item.id
-                                              ? {
-                                                  ...planItem,
-                                                  completed: true,
-                                                  completedMinutes: minutes
-                                                }
-                                              : planItem
-                                          );
-                                          return { ...state };
-                                        });
-                                      }}
-                                    >
-                                      Отметить активность
-                                    </button>
-                                  ) : (
-                                    <button
-                                      className="btn-primary w-full sm:w-auto"
-                                      onClick={() => {
-                                        if (!session) return;
-                                        setRunner(session);
-                                        setRunnerProtocolId(session.protocolRef ?? null);
-                                      }}
-                                    >
-                                      Запустить
-                                    </button>
-                                  )
-                                ) : (
-                                  <button
-                                    className="btn-secondary w-full sm:w-auto"
-                                    onClick={() => {
-                                      if (item.logId) {
-                                        if (item.isMovement) {
-                                          deleteMovementSessionLog(item.logId);
-                                        } else {
-                                          deleteTrainingLog(item.logId);
-                                        }
-                                      }
-                                      updateData(state => {
-                                        const plan = state.planner.dayPlans.find(
-                                          planItem => planItem.date === selectedDate
-                                        );
-                                        if (!plan) return { ...state };
-                                        plan.workoutsPlan = plan.workoutsPlan.map(planItem =>
-                                          planItem.id === item.id
-                                            ? {
-                                                ...planItem,
-                                                completed: false,
-                                                completedMinutes: undefined
-                                              }
-                                            : planItem
-                                        );
-                                        return { ...state };
-                                      });
-                                    }}
-                                  >
-                                    Отменить отметку
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ) : null}
                         </div>
                       );
                     }
@@ -1581,6 +1619,19 @@ const TodayPage = () => {
                     onChange={event => {
                       const value = Number(event.target.value);
                       setMovementDurationMinutes(Number.isFinite(value) ? value : 0);
+                    }}
+                  />
+                </label>
+                <label className="text-xs text-slate-500">
+                  Калории
+                  <input
+                    type="number"
+                    className="input mt-1"
+                    min={0}
+                    value={movementCalories}
+                    onChange={event => {
+                      const value = Number(event.target.value);
+                      setMovementCalories(Number.isFinite(value) ? value : 0);
                     }}
                   />
                 </label>
@@ -2303,6 +2354,33 @@ const TodayPage = () => {
             setTrainingForm(prev => ({ ...prev, minutes: Number(event.target.value) }))
           }
         />
+        <label className="text-sm font-semibold text-slate-600">Подходы</label>
+        <input
+          type="number"
+          className="input"
+          value={trainingForm.sets}
+          onChange={event =>
+            setTrainingForm(prev => ({ ...prev, sets: Number(event.target.value) }))
+          }
+        />
+        <label className="text-sm font-semibold text-slate-600">Повторы</label>
+        <input
+          type="number"
+          className="input"
+          value={trainingForm.reps}
+          onChange={event =>
+            setTrainingForm(prev => ({ ...prev, reps: Number(event.target.value) }))
+          }
+        />
+        <label className="text-sm font-semibold text-slate-600">Калории</label>
+        <input
+          type="number"
+          className="input"
+          value={trainingForm.calories}
+          onChange={event =>
+            setTrainingForm(prev => ({ ...prev, calories: Number(event.target.value) }))
+          }
+        />
         <label className="text-sm font-semibold text-slate-600">Время</label>
         <input
           type="time"
@@ -2318,6 +2396,9 @@ const TodayPage = () => {
               dateTime: toDateTime(selectedDate, trainingForm.time),
               type: 'workout',
               minutes: trainingForm.minutes,
+              sets: trainingForm.sets || undefined,
+              reps: trainingForm.reps || undefined,
+              calories: trainingForm.calories || undefined,
               timeOfDay: getTimeOfDayFromTime(trainingForm.time)
             });
             setSheet(null);
@@ -2358,6 +2439,28 @@ const TodayPage = () => {
               onChange={event =>
                 setMovementDraft(prev =>
                   prev ? { ...prev, durationMinutes: Number(event.target.value) } : prev
+                )
+              }
+            />
+            <label className="text-sm font-semibold text-slate-600">Шаги</label>
+            <input
+              type="number"
+              className="input"
+              value={movementDraft.steps ?? 0}
+              onChange={event =>
+                setMovementDraft(prev =>
+                  prev ? { ...prev, steps: Number(event.target.value) } : prev
+                )
+              }
+            />
+            <label className="text-sm font-semibold text-slate-600">Калории</label>
+            <input
+              type="number"
+              className="input"
+              value={movementDraft.calories ?? 0}
+              onChange={event =>
+                setMovementDraft(prev =>
+                  prev ? { ...prev, calories: Number(event.target.value) } : prev
                 )
               }
             />
@@ -2660,6 +2763,7 @@ const TodayPage = () => {
                 dateTime: completedAt,
                 type: 'workout',
                 minutes: completedMinutes,
+                protocolRef: runnerProtocolId ?? undefined,
                 timeOfDay: getTimeOfDayFromDateTime(completedAt)
               });
               updateData(state => {
