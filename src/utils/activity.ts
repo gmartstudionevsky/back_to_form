@@ -42,22 +42,44 @@ export const calcMovementSessionCoefficient = (
   options: { includeSteps?: boolean; includeCalories?: boolean } = {}
 ) => {
   const metrics = activity?.activityMetrics ?? {};
+  const model = metrics.calculationModel ?? 'combined';
+  const intensityMultiplier = metrics.intensityMultiplier ?? 1;
   const perMinute = metrics.perMinute ?? defaults.movementPerMinute;
   const perKm = metrics.perKm ?? defaults.distanceKm;
   const perFlight = metrics.perFlight ?? defaults.flight;
   const perStep = metrics.perStep ?? defaults.step;
   const perKcal = metrics.perKcal ?? defaults.kcal;
+  const base = metrics.base ?? 0;
   const distance = log.distanceKm ?? 0;
   const flights = log.actualFlights ?? log.plannedFlights ?? 0;
-  const steps = options.includeSteps ? log.steps ?? 0 : 0;
+  const steps =
+    options.includeSteps || model === 'steps' || model === 'combined' ? log.steps ?? 0 : 0;
   const calories = options.includeCalories ? log.calories ?? 0 : 0;
-  return (
-    log.durationMinutes * perMinute +
-    distance * perKm +
-    flights * perFlight +
-    steps * perStep +
-    calories * perKcal
-  );
+  let coefficient = base;
+  switch (model) {
+    case 'time':
+      coefficient += log.durationMinutes * perMinute;
+      break;
+    case 'distance':
+      coefficient += distance * perKm;
+      break;
+    case 'steps':
+      coefficient += steps * perStep;
+      break;
+    case 'stairs':
+      coefficient += flights * perFlight;
+      break;
+    case 'combined':
+    default:
+      coefficient +=
+        log.durationMinutes * perMinute +
+        distance * perKm +
+        flights * perFlight +
+        steps * perStep +
+        calories * perKcal;
+      break;
+  }
+  return coefficient * intensityMultiplier;
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
@@ -170,17 +192,31 @@ export const calcProtocolCoefficient = (
   let coefficient = 0;
   protocol.steps.forEach(step => {
     const exercise = exercises.find(item => item.id === step.exerciseRef);
+    const metrics = exercise?.activityMetrics ?? {};
+    const model = metrics.calculationModel ?? 'combined';
+    const intensityMultiplier = metrics.intensityMultiplier ?? 1;
+    const perMinute = metrics.perMinute ?? defaults.workoutPerMinute;
+    const perRep = metrics.perRep ?? defaults.rep;
+    const perSet = metrics.perSet ?? defaults.set;
+    const base = metrics.base ?? defaults.exerciseBase;
     if (step.durationSec) {
-      const perMinute = exercise?.activityMetrics?.perMinute ?? defaults.workoutPerMinute;
-      coefficient += (step.durationSec / 60) * perMinute;
-      return;
-    }
-    if (exercise?.activityMetrics?.base) {
-      coefficient += exercise.activityMetrics.base;
+      if (model === 'reps' || model === 'sets') {
+        coefficient += base * intensityMultiplier;
+        return;
+      }
+      coefficient += (step.durationSec / 60) * perMinute * intensityMultiplier;
       return;
     }
     if (step.exerciseRef) {
-      coefficient += defaults.exerciseBase;
+      if (model === 'reps') {
+        coefficient += perRep * intensityMultiplier;
+        return;
+      }
+      if (model === 'sets') {
+        coefficient += perSet * intensityMultiplier;
+        return;
+      }
+      coefficient += base * intensityMultiplier;
     }
   });
   if (!coefficient && plannedMinutes) {
@@ -198,8 +234,17 @@ export const calcPlannedWorkoutCoefficient = (
 ) => {
   const plannedMinutes = item.plannedMinutes ?? calcProtocolDurationMinutes(protocol);
   if (item.kind === 'movement' || !item.protocolRef) {
-    const perMinute = movementActivity?.activityMetrics?.perMinute ?? defaults.movementPerMinute;
-    return plannedMinutes ? plannedMinutes * perMinute : 0;
+    const metrics = movementActivity?.activityMetrics ?? {};
+    const model = metrics.calculationModel ?? 'combined';
+    const intensityMultiplier = metrics.intensityMultiplier ?? 1;
+    const perMinute = metrics.perMinute ?? defaults.movementPerMinute;
+    if (plannedMinutes && (model === 'time' || model === 'combined')) {
+      return plannedMinutes * perMinute * intensityMultiplier;
+    }
+    if (plannedMinutes) {
+      return plannedMinutes * perMinute * intensityMultiplier;
+    }
+    return (metrics.base ?? 0) * intensityMultiplier;
   }
   return calcProtocolCoefficient(protocol, exercises, defaults, plannedMinutes);
 };

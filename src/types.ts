@@ -30,6 +30,15 @@ export type Protocol = {
 };
 
 export type ActivityMetrics = {
+  calculationModel?:
+    | 'time'
+    | 'reps'
+    | 'sets'
+    | 'distance'
+    | 'steps'
+    | 'stairs'
+    | 'combined';
+  intensityMultiplier?: number;
   perMinute?: number;
   perRep?: number;
   perSet?: number;
@@ -144,6 +153,7 @@ export type DayPlan = {
   plannedSteps?: number;
   activityTargets?: {
     coefficient?: number;
+    units?: number;
     trainingMinutes?: number;
     movementMinutes?: number;
     steps?: number;

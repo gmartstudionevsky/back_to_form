@@ -96,7 +96,11 @@ const LibraryPage = () => {
     tags: '',
     steps: '',
     activityPerMinute: 0.04,
-    activityBase: 0.2
+    activityPerRep: 0.01,
+    activityPerSet: 0.12,
+    activityBase: 0.2,
+    calculationModel: 'combined' as const,
+    intensityMultiplier: 1
   });
   const [newMovementActivity, setNewMovementActivity] = useState({
     name: '',
@@ -104,7 +108,9 @@ const LibraryPage = () => {
     perMinute: 0.03,
     perKm: 0.3,
     perStep: 0.00008,
-    perFlight: 0.05
+    perFlight: 0.05,
+    calculationModel: 'combined' as const,
+    intensityMultiplier: 1
   });
   const [taskDate, setTaskDate] = useState(todayISO());
 
@@ -1058,6 +1064,22 @@ const LibraryPage = () => {
               value={newExercise.steps}
               onChange={event => setNewExercise(prev => ({ ...prev, steps: event.target.value }))}
             />
+            <label className="text-sm font-semibold text-slate-600">Модель расчёта</label>
+            <select
+              className="input"
+              value={newExercise.calculationModel}
+              onChange={event =>
+                setNewExercise(prev => ({
+                  ...prev,
+                  calculationModel: event.target.value as typeof newExercise.calculationModel
+                }))
+              }
+            >
+              <option value="time">По времени</option>
+              <option value="reps">По повторениям</option>
+              <option value="sets">По подходам</option>
+              <option value="combined">Комбинированная</option>
+            </select>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <input
                 className="input"
@@ -1075,6 +1097,32 @@ const LibraryPage = () => {
               <input
                 className="input"
                 type="number"
+                step="0.001"
+                placeholder="Коэф. за повтор"
+                value={newExercise.activityPerRep}
+                onChange={event =>
+                  setNewExercise(prev => ({
+                    ...prev,
+                    activityPerRep: Number(event.target.value)
+                  }))
+                }
+              />
+              <input
+                className="input"
+                type="number"
+                step="0.01"
+                placeholder="Коэф. за подход"
+                value={newExercise.activityPerSet}
+                onChange={event =>
+                  setNewExercise(prev => ({
+                    ...prev,
+                    activityPerSet: Number(event.target.value)
+                  }))
+                }
+              />
+              <input
+                className="input"
+                type="number"
                 step="0.01"
                 placeholder="Базовый коэф."
                 value={newExercise.activityBase}
@@ -1082,6 +1130,19 @@ const LibraryPage = () => {
                   setNewExercise(prev => ({
                     ...prev,
                     activityBase: Number(event.target.value)
+                  }))
+                }
+              />
+              <input
+                className="input"
+                type="number"
+                step="0.05"
+                placeholder="Множитель интенсивности"
+                value={newExercise.intensityMultiplier}
+                onChange={event =>
+                  setNewExercise(prev => ({
+                    ...prev,
+                    intensityMultiplier: Number(event.target.value)
                   }))
                 }
               />
@@ -1108,7 +1169,11 @@ const LibraryPage = () => {
                     progressions: [],
                     activityMetrics: {
                       perMinute: newExercise.activityPerMinute,
-                      base: newExercise.activityBase
+                      perRep: newExercise.activityPerRep,
+                      perSet: newExercise.activityPerSet,
+                      base: newExercise.activityBase,
+                      calculationModel: newExercise.calculationModel,
+                      intensityMultiplier: newExercise.intensityMultiplier
                     }
                   });
                   return { ...state };
@@ -1118,7 +1183,11 @@ const LibraryPage = () => {
                   tags: '',
                   steps: '',
                   activityPerMinute: 0.04,
-                  activityBase: 0.2
+                  activityPerRep: 0.01,
+                  activityPerSet: 0.12,
+                  activityBase: 0.2,
+                  calculationModel: 'combined',
+                  intensityMultiplier: 1
                 });
                 setCreateSheet(null);
               }}
@@ -1152,6 +1221,23 @@ const LibraryPage = () => {
               <option value="run">Бег</option>
               <option value="march">Ходьба на месте</option>
               <option value="stairs">Ходьба по лестницам</option>
+            </select>
+            <label className="text-sm font-semibold text-slate-600">Модель расчёта</label>
+            <select
+              className="input"
+              value={newMovementActivity.calculationModel}
+              onChange={event =>
+                setNewMovementActivity(prev => ({
+                  ...prev,
+                  calculationModel: event.target.value as typeof newMovementActivity.calculationModel
+                }))
+              }
+            >
+              <option value="time">По времени</option>
+              <option value="distance">По дистанции</option>
+              <option value="steps">По шагам</option>
+              <option value="stairs">По пролётам</option>
+              <option value="combined">Комбинированная</option>
             </select>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <input
@@ -1206,6 +1292,19 @@ const LibraryPage = () => {
                   }))
                 }
               />
+              <input
+                className="input"
+                type="number"
+                step="0.05"
+                placeholder="Множитель интенсивности"
+                value={newMovementActivity.intensityMultiplier}
+                onChange={event =>
+                  setNewMovementActivity(prev => ({
+                    ...prev,
+                    intensityMultiplier: Number(event.target.value)
+                  }))
+                }
+              />
             </div>
             <button
               className="btn-primary w-full"
@@ -1220,7 +1319,9 @@ const LibraryPage = () => {
                       perMinute: newMovementActivity.perMinute,
                       perKm: newMovementActivity.perKm,
                       perStep: newMovementActivity.perStep,
-                      perFlight: newMovementActivity.perFlight
+                      perFlight: newMovementActivity.perFlight,
+                      calculationModel: newMovementActivity.calculationModel,
+                      intensityMultiplier: newMovementActivity.intensityMultiplier
                     }
                   });
                   return { ...state };
@@ -1231,7 +1332,9 @@ const LibraryPage = () => {
                   perMinute: 0.03,
                   perKm: 0.3,
                   perStep: 0.00008,
-                  perFlight: 0.05
+                  perFlight: 0.05,
+                  calculationModel: 'combined',
+                  intensityMultiplier: 1
                 });
                 setCreateSheet(null);
               }}
