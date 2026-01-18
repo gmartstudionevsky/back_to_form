@@ -1,6 +1,6 @@
 import { AppData } from '../types';
 
-export const schemaVersion = 10;
+export const schemaVersion = 11;
 
 export const seedData: AppData = {
   schemaVersion,
@@ -447,6 +447,10 @@ export const seedData: AppData = {
         id: 'drink-water',
         name: 'Вода',
         hydrationFactor: 1,
+        kcalPer100ml: 0,
+        proteinPer100ml: 0,
+        fatPer100ml: 0,
+        carbPer100ml: 0,
         portions: [
           { label: 'Стакан 250 мл', ml: 250 },
           { label: 'Бутылка 500 мл', ml: 500 },
@@ -457,6 +461,10 @@ export const seedData: AppData = {
         id: 'drink-tea',
         name: 'Чай',
         hydrationFactor: 0.9,
+        kcalPer100ml: 0,
+        proteinPer100ml: 0,
+        fatPer100ml: 0,
+        carbPer100ml: 0,
         portions: [
           { label: 'Чашка 200 мл', ml: 200 },
           { label: 'Кружка 300 мл', ml: 300 }
@@ -466,6 +474,10 @@ export const seedData: AppData = {
         id: 'drink-coffee',
         name: 'Кофе',
         hydrationFactor: 0.8,
+        kcalPer100ml: 0,
+        proteinPer100ml: 0,
+        fatPer100ml: 0,
+        carbPer100ml: 0,
         portions: [
           { label: 'Эспрессо 60 мл', ml: 60 },
           { label: 'Кружка 200 мл', ml: 200 }

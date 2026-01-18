@@ -80,9 +80,25 @@ const TrackPage = () => {
 
   const dayPlan = data.planner.dayPlans.find(plan => plan.date === selectedDate);
   const foodDay = data.logs.foodDays.find(day => day.date === selectedDate);
+  const drinkLogs = data.logs.drinks.filter(log => log.dateTime.slice(0, 10) === selectedDate);
+  const drinkNutritionTotals = useMemo(() => {
+    return drinkLogs.reduce(
+      (acc, log) => {
+        const drink = data.library.drinks.find(item => item.id === log.drinkId);
+        const factor = (log.portionMl * log.portionsCount) / 100;
+        return {
+          kcal: acc.kcal + (drink?.kcalPer100ml ?? 0) * factor,
+          protein: acc.protein + (drink?.proteinPer100ml ?? 0) * factor,
+          fat: acc.fat + (drink?.fatPer100ml ?? 0) * factor,
+          carb: acc.carb + (drink?.carbPer100ml ?? 0) * factor
+        };
+      },
+      { kcal: 0, protein: 0, fat: 0, carb: 0 }
+    );
+  }, [drinkLogs, data.library.drinks]);
   const totals = useMemo(() => {
     const entries = foodDay?.entries ?? [];
-    return entries.reduce(
+    const foodTotals = entries.reduce(
       (acc, entry) => {
         const macro = calcFoodEntry(entry, data.library);
         return {
@@ -94,7 +110,13 @@ const TrackPage = () => {
       },
       { kcal: 0, protein: 0, fat: 0, carb: 0 }
     );
-  }, [foodDay, data.library]);
+    return {
+      kcal: foodTotals.kcal + drinkNutritionTotals.kcal,
+      protein: foodTotals.protein + drinkNutritionTotals.protein,
+      fat: foodTotals.fat + drinkNutritionTotals.fat,
+      carb: foodTotals.carb + drinkNutritionTotals.carb
+    };
+  }, [foodDay, data.library, drinkNutritionTotals]);
 
   const plannedMeals = dayPlan?.mealsPlan;
   const plannedMealItems = plannedMeals ? Object.values(plannedMeals).flat() : [];

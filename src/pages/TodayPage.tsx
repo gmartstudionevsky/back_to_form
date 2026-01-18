@@ -178,6 +178,7 @@ const TodayPage = () => {
   const dayPlan = data.planner.dayPlans.find(plan => plan.date === selectedDate);
   const foodDay = data.logs.foodDays.find(day => day.date === selectedDate);
   const nutritionTargets = dayPlan?.nutritionTargets ?? {};
+  const drinkLogs = data.logs.drinks.filter(log => log.dateTime.slice(0, 10) === selectedDate);
   const plannedMealsCount = dayPlan
     ? (Object.keys(mealLabels) as FoodEntry['meal'][]).filter(
         meal => dayPlan.mealsPlan[meal].length > 0 || Boolean(dayPlan.mealTimes?.[meal])
@@ -188,9 +189,25 @@ const TodayPage = () => {
     return new Set(entries.map(entry => entry.meal)).size;
   }, [foodDay]);
 
+  const drinkNutritionTotals = useMemo(() => {
+    return drinkLogs.reduce(
+      (acc, log) => {
+        const drink = data.library.drinks.find(item => item.id === log.drinkId);
+        const factor = (log.portionMl * log.portionsCount) / 100;
+        return {
+          kcal: acc.kcal + (drink?.kcalPer100ml ?? 0) * factor,
+          protein: acc.protein + (drink?.proteinPer100ml ?? 0) * factor,
+          fat: acc.fat + (drink?.fatPer100ml ?? 0) * factor,
+          carb: acc.carb + (drink?.carbPer100ml ?? 0) * factor
+        };
+      },
+      { kcal: 0, protein: 0, fat: 0, carb: 0 }
+    );
+  }, [drinkLogs, data.library.drinks]);
+
   const totals = useMemo(() => {
     const entries = foodDay?.entries ?? [];
-    return entries.reduce(
+    const foodTotals = entries.reduce(
       (acc, entry) => {
         const macro = calcFoodEntry(entry, data.library);
         return {
@@ -202,7 +219,13 @@ const TodayPage = () => {
       },
       { kcal: 0, protein: 0, fat: 0, carb: 0 }
     );
-  }, [foodDay, data.library]);
+    return {
+      kcal: foodTotals.kcal + drinkNutritionTotals.kcal,
+      protein: foodTotals.protein + drinkNutritionTotals.protein,
+      fat: foodTotals.fat + drinkNutritionTotals.fat,
+      carb: foodTotals.carb + drinkNutritionTotals.carb
+    };
+  }, [foodDay, data.library, drinkNutritionTotals]);
 
   const plannedTotals = useMemo(() => {
     if (!dayPlan?.mealsPlan) return { kcal: 0, protein: 0, fat: 0, carb: 0 };
@@ -284,16 +307,47 @@ const TodayPage = () => {
   const cigaretteCount = data.logs.smoking
     .filter(log => log.dateTime.slice(0, 10) === selectedDate)
     .reduce((sum, log) => sum + log.count, 0);
-  const drinkLogs = data.logs.drinks.filter(log => log.dateTime.slice(0, 10) === selectedDate);
   const drinkTotalMl = drinkLogs.reduce(
     (sum, log) => sum + log.portionMl * log.portionsCount,
     0
   );
-  const hydrationEquivalent = drinkLogs.reduce((sum, log) => {
+  const drinkHydrationMl = drinkLogs.reduce((sum, log) => {
     const drink = data.library.drinks.find(item => item.id === log.drinkId);
     const factor = drink?.hydrationFactor ?? 1;
     return sum + log.portionMl * log.portionsCount * factor;
   }, 0);
+  const foodHydrationMl = (foodDay?.entries ?? []).reduce((sum, entry) => {
+    if (entry.kind === 'product' && entry.refId && entry.grams) {
+      const product = data.library.products.find(item => item.id === entry.refId);
+      if (!product?.hydrationContribution) return sum;
+      return sum + entry.grams;
+    }
+    if (entry.kind === 'dish' && entry.refId) {
+      const recipe = data.library.recipes.find(item => item.id === entry.refId);
+      if (!recipe?.hydrationContribution) return sum;
+      const totalGrams = recipe.ingredients.reduce(
+        (recipeSum, ingredient) => recipeSum + ingredient.grams,
+        0
+      );
+      if (!totalGrams || !recipe.servings) return sum;
+      const servings = entry.servings ?? 1;
+      return sum + (totalGrams / recipe.servings) * servings;
+    }
+    return sum;
+  }, 0);
+  const hydrationEquivalent = drinkHydrationMl + foodHydrationMl;
+  const hydrationWeight = data.logs.weight
+    .filter(log => log.dateTime.slice(0, 10) <= selectedDate)
+    .sort((a, b) => a.dateTime.localeCompare(b.dateTime))
+    .slice(-1)[0]?.weightKg;
+  const hydrationBasePerKg = 30;
+  const hydrationActivityBonus = 400;
+  const hydrationTargetMl =
+    hydrationWeight !== undefined
+      ? hydrationWeight * hydrationBasePerKg + activityCoefficient * hydrationActivityBonus
+      : undefined;
+  const hydrationCoefficient = hydrationTargetMl ? hydrationEquivalent / hydrationTargetMl : 0;
+  const hydrationProgress = getProgressStatus(hydrationEquivalent, hydrationTargetMl);
   const lastWeight = data.logs.weight
     .filter(log => log.dateTime.slice(0, 10) === selectedDate)
     .slice(-1)[0]?.weightKg;
@@ -1121,7 +1175,13 @@ const TodayPage = () => {
           <div className="rounded-xl bg-slate-50 p-3">
             <p className="text-xs uppercase text-slate-400">Водный баланс</p>
             <p className="text-lg font-semibold">{hydrationEquivalent.toFixed(0)} мл</p>
-            <p className="text-xs text-slate-400">{drinkTotalMl.toFixed(0)} мл напитков</p>
+            <p className="text-xs text-slate-400">
+              Цель: {hydrationTargetMl !== undefined ? hydrationTargetMl.toFixed(0) : '—'} мл ·
+              Коэф. {hydrationTargetMl !== undefined ? hydrationCoefficient.toFixed(2) : '—'}
+            </p>
+            <p className="text-[11px] text-slate-400">
+              Напитки: {drinkTotalMl.toFixed(0)} мл · Еда: {foodHydrationMl.toFixed(0)} мл
+            </p>
           </div>
           <div className="rounded-xl bg-slate-50 p-3">
             <p className="text-xs uppercase text-slate-400">Вес</p>
@@ -1212,6 +1272,12 @@ const TodayPage = () => {
             <p className="text-sm font-semibold text-slate-700">
               {hydrationEquivalent.toFixed(0)} мл
             </p>
+            <p className="text-[11px] text-slate-400">
+              {hydrationTargetMl !== undefined
+                ? `Цель: ${hydrationTargetMl.toFixed(0)} мл · Коэф. ${hydrationCoefficient.toFixed(2)}`
+                : 'Нет данных для цели'}
+            </p>
+            <p className={`text-[11px] ${hydrationProgress.tone}`}>{hydrationProgress.label}</p>
           </div>
         </div>
         <div className="space-y-4">
@@ -1912,8 +1978,13 @@ const TodayPage = () => {
       <div className="card p-4 space-y-2" id="water">
         <h2 className="section-title">Водный баланс</h2>
         <p className="text-sm text-slate-500">
-          Эквивалент воды: {hydrationEquivalent.toFixed(0)} мл · Выпито напитков:{' '}
-          {drinkTotalMl.toFixed(0)} мл
+          Эквивалент воды: {hydrationEquivalent.toFixed(0)} мл · Цель:{' '}
+          {hydrationTargetMl !== undefined ? hydrationTargetMl.toFixed(0) : '—'} мл · Коэф.{' '}
+          {hydrationTargetMl !== undefined ? hydrationCoefficient.toFixed(2) : '—'}
+        </p>
+        <p className="text-xs text-slate-400">
+          Напитки: {drinkTotalMl.toFixed(0)} мл · Еда: {foodHydrationMl.toFixed(0)} мл ·
+          Вес: {hydrationWeight ?? '—'} кг · Активность: {activityCoefficient.toFixed(2)}
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
           <button
