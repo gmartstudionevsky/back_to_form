@@ -62,7 +62,8 @@ const LibraryPage = () => {
     name: '',
     servings: 1,
     category: 'main' as Recipe['category'],
-    nutritionTags: [] as NutritionTag[]
+    nutritionTags: [] as NutritionTag[],
+    hydrationContribution: false
   });
   const [newProduct, setNewProduct] = useState({
     name: '',
@@ -70,7 +71,8 @@ const LibraryPage = () => {
     proteinPer100g: 0,
     fatPer100g: 0,
     carbPer100g: 0,
-    nutritionTags: [] as NutritionTag[]
+    nutritionTags: [] as NutritionTag[],
+    hydrationContribution: false
   });
   const [newExercise, setNewExercise] = useState({
     name: '',
@@ -429,6 +431,12 @@ const LibraryPage = () => {
                 </div>
               </div>
             ) : null}
+            {(detailItem as Recipe).hydrationContribution ? (
+              <div>
+                <p className="text-xs font-semibold uppercase text-slate-400">Водный баланс</p>
+                <span className="badge">Учитывается</span>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -457,6 +465,12 @@ const LibraryPage = () => {
                     </span>
                   ))}
                 </div>
+              </div>
+            ) : null}
+            {(detailItem as any).hydrationContribution ? (
+              <div>
+                <p className="text-xs font-semibold uppercase text-slate-400">Водный баланс</p>
+                <span className="badge">Учитывается</span>
               </div>
             ) : null}
           </div>
@@ -656,6 +670,20 @@ const LibraryPage = () => {
                 ))}
               </div>
             </div>
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={newDish.hydrationContribution}
+                onChange={() =>
+                  setNewDish(prev => ({
+                    ...prev,
+                    hydrationContribution: !prev.hydrationContribution
+                  }))
+                }
+              />
+              Восполняет водный баланс
+            </label>
             <button
               className="btn-primary w-full"
               onClick={() => {
@@ -669,11 +697,18 @@ const LibraryPage = () => {
                     steps: [],
                     tags: [],
                     category: newDish.category,
-                    nutritionTags: newDish.nutritionTags
+                    nutritionTags: newDish.nutritionTags,
+                    hydrationContribution: newDish.hydrationContribution
                   });
                   return { ...state };
                 });
-                setNewDish({ name: '', servings: 1, category: 'main', nutritionTags: [] });
+                setNewDish({
+                  name: '',
+                  servings: 1,
+                  category: 'main',
+                  nutritionTags: [],
+                  hydrationContribution: false
+                });
                 setCreateSheet(null);
               }}
             >
@@ -744,6 +779,20 @@ const LibraryPage = () => {
                 ))}
               </div>
             </div>
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={newProduct.hydrationContribution}
+                onChange={() =>
+                  setNewProduct(prev => ({
+                    ...prev,
+                    hydrationContribution: !prev.hydrationContribution
+                  }))
+                }
+              />
+              Восполняет водный баланс
+            </label>
             <button
               className="btn-primary w-full"
               onClick={() => {
@@ -756,7 +805,8 @@ const LibraryPage = () => {
                     proteinPer100g: newProduct.proteinPer100g || undefined,
                     fatPer100g: newProduct.fatPer100g || undefined,
                     carbPer100g: newProduct.carbPer100g || undefined,
-                    nutritionTags: newProduct.nutritionTags
+                    nutritionTags: newProduct.nutritionTags,
+                    hydrationContribution: newProduct.hydrationContribution
                   });
                   return { ...state };
                 });
@@ -766,7 +816,8 @@ const LibraryPage = () => {
                   proteinPer100g: 0,
                   fatPer100g: 0,
                   carbPer100g: 0,
-                  nutritionTags: []
+                  nutritionTags: [],
+                  hydrationContribution: false
                 });
                 setCreateSheet(null);
               }}

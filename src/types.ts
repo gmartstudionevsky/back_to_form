@@ -71,6 +71,7 @@ export type Product = {
   proteinPer100g?: number;
   fatPer100g?: number;
   carbPer100g?: number;
+  hydrationContribution?: boolean;
   portionPresets?: PortionPreset[];
   nutritionTags?: NutritionTag[];
   notes?: string;
@@ -89,6 +90,7 @@ export type Recipe = {
   category: 'breakfast' | 'main' | 'side' | 'salad' | 'snack' | 'dessert' | 'drink' | 'cheat';
   complexity?: 'easy' | 'medium';
   nutritionTags?: NutritionTag[];
+  hydrationContribution?: boolean;
 };
 
 export type Rule = {
@@ -316,6 +318,10 @@ export type Drink = {
   id: UUID;
   name: string;
   hydrationFactor: number;
+  kcalPer100ml?: number;
+  proteinPer100ml?: number;
+  fatPer100ml?: number;
+  carbPer100ml?: number;
   portions: DrinkPortion[];
 };
 

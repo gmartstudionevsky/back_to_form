@@ -288,6 +288,23 @@ export const loadData = (): AppData => {
           calories: log.calories ?? undefined
         }));
       }
+      if (!parsed.schemaVersion || parsed.schemaVersion < 11) {
+        migrated.library.products = (migrated.library.products ?? parsed.library?.products ?? []).map(product => ({
+          ...product,
+          hydrationContribution: product.hydrationContribution ?? false
+        }));
+        migrated.library.recipes = (migrated.library.recipes ?? parsed.library?.recipes ?? []).map(recipe => ({
+          ...recipe,
+          hydrationContribution: recipe.hydrationContribution ?? false
+        }));
+        migrated.library.drinks = (migrated.library.drinks ?? parsed.library?.drinks ?? []).map(drink => ({
+          ...drink,
+          kcalPer100ml: drink.kcalPer100ml ?? 0,
+          proteinPer100ml: drink.proteinPer100ml ?? 0,
+          fatPer100ml: drink.fatPer100ml ?? 0,
+          carbPer100ml: drink.carbPer100ml ?? 0
+        }));
+      }
       return migrated;
     }
     return parsed;
