@@ -107,7 +107,6 @@ const TodayPage = () => {
   const [sheet, setSheet] = useState<
     | 'food'
     | 'training'
-    | 'smoking'
     | 'weight'
     | 'waist'
     | 'photo'
@@ -172,7 +171,6 @@ const TodayPage = () => {
     drinkId: '',
     portionLabel: '',
     portionMl: 0,
-    portionsCount: 1,
     time: currentTimeString()
   });
   const [weightForm, setWeightForm] = useState({ weightKg: 72, time: currentTimeString() });
@@ -1177,13 +1175,15 @@ const TodayPage = () => {
     lastSleepDuration !== null && sleepTargetDuration !== undefined
       ? lastSleepDuration - sleepTargetDuration
       : null;
-  const saveQuickSleepTimes = () => {
+  const saveQuickSleepTimes = (mode: 'bedTime' | 'wakeTime') => {
     const baseLog = sleepLogs.slice(-1)[0];
     const payload = {
       id: baseLog?.id ?? '',
       date: selectedDate,
-      bedTime: quickSleepTimes.bedTime,
-      wakeTime: quickSleepTimes.wakeTime,
+      bedTime:
+        mode === 'bedTime' ? quickSleepTimes.bedTime : baseLog?.bedTime ?? quickSleepTimes.bedTime,
+      wakeTime:
+        mode === 'wakeTime' ? quickSleepTimes.wakeTime : baseLog?.wakeTime ?? quickSleepTimes.wakeTime,
       quality1to5: baseLog?.quality1to5 ?? 3,
       notes: baseLog?.notes ?? ''
     };
@@ -1209,6 +1209,9 @@ const TodayPage = () => {
     ...smokingItems,
     ...drinkItems
   ];
+  const smokingTriggers = ['стресс', 'скука', 'привычка', 'компания', 'кофе'];
+  const smokingCountOptions = [1, 2, 3, 4, 5];
+  const smokingStressOptions = [1, 2, 3, 4, 5];
   const plannedItemsCount = plannedMealItems.length + plannedWorkoutItems.length;
   const completedItemsCount =
     plannedMealItems.filter(item => item.completed).length +
@@ -2149,32 +2152,39 @@ const TodayPage = () => {
               </button>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="text-xs text-slate-500">
-                Лёг спать
-                <input
-                  type="time"
-                  className="input mt-1"
-                  value={quickSleepTimes.bedTime}
-                  onChange={event =>
-                    setQuickSleepTimes(prev => ({ ...prev, bedTime: event.target.value }))
-                  }
-                />
-              </label>
-              <label className="text-xs text-slate-500">
-                Встал
-                <input
-                  type="time"
-                  className="input mt-1"
-                  value={quickSleepTimes.wakeTime}
-                  onChange={event =>
-                    setQuickSleepTimes(prev => ({ ...prev, wakeTime: event.target.value }))
-                  }
-                />
-              </label>
+              <div className="space-y-2">
+                <label className="text-xs text-slate-500">
+                  Лёг спать
+                  <input
+                    type="time"
+                    className="input mt-1"
+                    value={quickSleepTimes.bedTime}
+                    onChange={event =>
+                      setQuickSleepTimes(prev => ({ ...prev, bedTime: event.target.value }))
+                    }
+                  />
+                </label>
+                <button className="btn-primary w-full" onClick={() => saveQuickSleepTimes('bedTime')}>
+                  Сохранить отбой
+                </button>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs text-slate-500">
+                  Встал
+                  <input
+                    type="time"
+                    className="input mt-1"
+                    value={quickSleepTimes.wakeTime}
+                    onChange={event =>
+                      setQuickSleepTimes(prev => ({ ...prev, wakeTime: event.target.value }))
+                    }
+                  />
+                </label>
+                <button className="btn-primary w-full" onClick={() => saveQuickSleepTimes('wakeTime')}>
+                  Сохранить подъём
+                </button>
+              </div>
             </div>
-            <button className="btn-primary w-full" onClick={saveQuickSleepTimes}>
-              Сохранить время сна
-            </button>
             <p className="text-sm text-slate-600">
               Последний: {lastSleep?.bedTime ?? '—'} → {lastSleep?.wakeTime ?? '—'} ·{' '}
               {formatMinutes(lastSleepDuration)}
@@ -2265,18 +2275,6 @@ const TodayPage = () => {
                 </select>
               </label>
               <label className="text-xs text-slate-500">
-                Порции
-                <input
-                  type="number"
-                  min={1}
-                  className="input mt-1"
-                  value={drinkForm.portionsCount}
-                  onChange={event =>
-                    setDrinkForm(prev => ({ ...prev, portionsCount: Number(event.target.value) }))
-                  }
-                />
-              </label>
-              <label className="text-xs text-slate-500">
                 Время
                 <input
                   type="time"
@@ -2296,7 +2294,7 @@ const TodayPage = () => {
                   drinkId: drinkForm.drinkId,
                   portionLabel: drinkForm.portionLabel,
                   portionMl: drinkForm.portionMl,
-                  portionsCount: drinkForm.portionsCount
+                  portionsCount: 1
                 });
                 setDrinkForm(prev => ({ ...prev, time: currentTimeString() }));
               }}
@@ -2307,19 +2305,83 @@ const TodayPage = () => {
           <div className="rounded-2xl border border-slate-200 p-3 space-y-2">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="text-sm font-semibold text-slate-500">Курение</h3>
-              <button
-                className="btn-secondary w-full sm:w-auto"
-                onClick={() => {
-                  setSmokingForm(prev => ({ ...prev, time: currentTimeString() }));
-                  setSheet('smoking');
-                }}
-              >
-                Добавить
-              </button>
             </div>
             <p className="text-sm text-slate-600">
               Лимит: {requirements?.smokingTargetMax ?? '—'} · Факт: {cigaretteCount}
             </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="text-xs text-slate-500">
+                Количество
+                <select
+                  className="input mt-1"
+                  value={smokingForm.count}
+                  onChange={event =>
+                    setSmokingForm(prev => ({ ...prev, count: Number(event.target.value) }))
+                  }
+                >
+                  {smokingCountOptions.map(option => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs text-slate-500">
+                Обоснование
+                <select
+                  className="input mt-1"
+                  value={smokingForm.trigger}
+                  onChange={event => setSmokingForm(prev => ({ ...prev, trigger: event.target.value }))}
+                >
+                  {smokingTriggers.map(trigger => (
+                    <option key={trigger} value={trigger}>
+                      {trigger}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs text-slate-500">
+                Стресс
+                <select
+                  className="input mt-1"
+                  value={smokingForm.stress}
+                  onChange={event =>
+                    setSmokingForm(prev => ({ ...prev, stress: Number(event.target.value) }))
+                  }
+                >
+                  {smokingStressOptions.map(option => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs text-slate-500">
+                Время
+                <input
+                  type="time"
+                  className="input mt-1"
+                  value={smokingForm.time}
+                  onChange={event => setSmokingForm(prev => ({ ...prev, time: event.target.value }))}
+                />
+              </label>
+            </div>
+            <button
+              className="btn-primary w-full"
+              onClick={() => {
+                addSmokingLog({
+                  id: '',
+                  dateTime: toDateTime(selectedDate, smokingForm.time),
+                  count: smokingForm.count,
+                  trigger: smokingForm.trigger,
+                  stressLevel1to5: smokingForm.stress,
+                  ruleApplied: smokingForm.ruleApplied
+                });
+                setSmokingForm(prev => ({ ...prev, time: currentTimeString() }));
+              }}
+            >
+              Добавить запись
+            </button>
             <div className="mt-2 space-y-1 text-xs text-slate-500">
               {smokingItems.length === 0 ? (
                 <p>Записей нет.</p>
@@ -2914,65 +2976,6 @@ const TodayPage = () => {
             </button>
           </>
         )}
-      </BottomSheet>
-
-      <BottomSheet open={sheet === 'smoking'} title="Добавить сигарету" onClose={() => setSheet(null)}>
-        <label className="text-sm font-semibold text-slate-600">Количество</label>
-        <input
-          type="number"
-          className="input"
-          value={smokingForm.count}
-          onChange={event => setSmokingForm(prev => ({ ...prev, count: Number(event.target.value) }))}
-        />
-        <label className="text-sm font-semibold text-slate-600">Триггер</label>
-        <input
-          className="input"
-          value={smokingForm.trigger}
-          onChange={event => setSmokingForm(prev => ({ ...prev, trigger: event.target.value }))}
-        />
-        <label className="text-sm font-semibold text-slate-600">Стресс (1-5)</label>
-        <input
-          type="number"
-          min={1}
-          max={5}
-          className="input"
-          value={smokingForm.stress}
-          onChange={event => setSmokingForm(prev => ({ ...prev, stress: Number(event.target.value) }))}
-        />
-        <label className="flex items-center gap-3 text-sm text-slate-600">
-          <input
-            type="checkbox"
-            className="h-5 w-5"
-            checked={smokingForm.ruleApplied}
-            onChange={event =>
-              setSmokingForm(prev => ({ ...prev, ruleApplied: event.target.checked }))
-            }
-          />
-          Правило применено
-        </label>
-        <label className="text-sm font-semibold text-slate-600">Время</label>
-        <input
-          type="time"
-          className="input"
-          value={smokingForm.time}
-          onChange={event => setSmokingForm(prev => ({ ...prev, time: event.target.value }))}
-        />
-        <button
-          className="btn-primary w-full"
-          onClick={() => {
-            addSmokingLog({
-              id: '',
-              dateTime: toDateTime(selectedDate, smokingForm.time),
-              count: smokingForm.count,
-              trigger: smokingForm.trigger,
-              stressLevel1to5: smokingForm.stress,
-              ruleApplied: smokingForm.ruleApplied
-            });
-            setSheet(null);
-          }}
-        >
-          Сохранить
-        </button>
       </BottomSheet>
 
       <BottomSheet
