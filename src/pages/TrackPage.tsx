@@ -5,6 +5,12 @@ import { calcFoodEntry, calcMealPlanItem } from '../utils/nutrition';
 import { combineDateTime, currentTimeString, todayISO } from '../utils/date';
 import { getTimeOfDayFromDateTime, timeOfDayLabels } from '../utils/timeOfDay';
 import {
+  calcMovementActivityMetrics,
+  calcStepsCoefficient,
+  calcTrainingActivityMetrics,
+  resolveActivityDefaults
+} from '../utils/activity';
+import {
   ActivityLog,
   FoodEntry,
   NutritionTag,
@@ -160,6 +166,39 @@ const TrackPage = () => {
 
   const toDateTime = (date: string, time?: string) => combineDateTime(date, time);
 
+  const resolveWeightForDateTime = (dateTime: string) =>
+    data.logs.weight
+      .filter(log => log.dateTime <= dateTime)
+      .sort((a, b) => a.dateTime.localeCompare(b.dateTime))
+      .slice(-1)[0]?.weightKg;
+
+  const activityContext = {
+    weightKg: resolveWeightForDateTime(toDateTime(selectedDate)),
+    intakeKcal: totals.kcal,
+    activityCoefficient
+  };
+
+  const estimateTraining = (log: {
+    minutes: number;
+    sets?: number;
+    reps?: number;
+    protocolRef?: string;
+  }) =>
+    calcTrainingActivityMetrics(log as ActivityLog, activityDefaults, activityContext, {
+      protocol: log.protocolRef
+        ? data.library.protocols.find(item => item.id === log.protocolRef)
+        : undefined,
+      exercises: data.library.exercises
+    }).calories;
+
+  const estimateMovement = (log: MovementSessionLog) => {
+    const activity = data.library.movementActivities.find(item => item.id === log.activityRef);
+    return calcMovementActivityMetrics(log, activity, activityDefaults, {
+      ...activityContext,
+      weightKg: resolveWeightForDateTime(log.dateTime)
+    }).calories;
+  };
+
   const renderNutritionTags = (tags?: NutritionTag[]) => {
     if (!tags?.length) return null;
     return (
@@ -177,6 +216,34 @@ const TrackPage = () => {
   const movementSessions = data.logs.movementSessions.filter(
     log => log.dateTime.slice(0, 10) === selectedDate
   );
+  const activityDefaults = resolveActivityDefaults(data.library.activityDefaults);
+  const resolveTrainingProtocol = (log: ActivityLog) =>
+    log.protocolRef
+      ? data.library.protocols.find(item => item.id === log.protocolRef)
+      : undefined;
+
+  const activityCoefficient = [
+    trainingLogs.reduce((sum, log) => {
+      const protocol = resolveTrainingProtocol(log);
+      return (
+        sum +
+        calcTrainingActivityMetrics(log, activityDefaults, {}, {
+          protocol,
+          exercises: data.library.exercises
+        }).coefficient
+      );
+    }, 0),
+    movementSessions.reduce((sum, log) => {
+      const activity = data.library.movementActivities.find(item => item.id === log.activityRef);
+      return (
+        sum +
+        calcMovementActivityMetrics(log, activity, activityDefaults, {}, {
+          includeSteps: !movementDay?.steps
+        }).coefficient
+      );
+    }, 0),
+    calcStepsCoefficient(movementDay?.steps ?? 0, activityDefaults)
+  ].reduce((sum, value) => sum + value, 0);
   const defaultMovementActivityId = data.library.movementActivities[0]?.id ?? '';
 
   useEffect(() => {
@@ -286,7 +353,6 @@ const TrackPage = () => {
         minutes: 45,
         sets: 0,
         reps: 0,
-        calories: 0,
         timeOfDay: getTimeOfDayFromDateTime(new Date().toISOString())
       }
     );
@@ -298,7 +364,7 @@ const TrackPage = () => {
       ...trainingDraft,
       sets: trainingDraft.sets || undefined,
       reps: trainingDraft.reps || undefined,
-      calories: trainingDraft.calories || undefined,
+      calories: estimateTraining(trainingDraft) || undefined,
       timeOfDay: getTimeOfDayFromDateTime(trainingDraft.dateTime)
     };
     if (trainingDraft.id) {
@@ -318,7 +384,6 @@ const TrackPage = () => {
         activityRef,
         durationMinutes: 20,
         steps: 0,
-        calories: 0,
         plannedFlights: 10,
         timeOfDay: getTimeOfDayFromDateTime(new Date().toISOString())
       }
@@ -330,7 +395,7 @@ const TrackPage = () => {
     const payload = {
       ...movementDraft,
       steps: movementDraft.steps || undefined,
-      calories: movementDraft.calories || undefined,
+      calories: estimateMovement(movementDraft) || undefined,
       timeOfDay: getTimeOfDayFromDateTime(movementDraft.dateTime)
     };
     if (movementDraft.id) {
@@ -1182,17 +1247,9 @@ const TrackPage = () => {
                 )
               }
             />
-            <label className="text-sm font-semibold text-slate-600">Калории</label>
-            <input
-              type="number"
-              className="input"
-              value={trainingDraft.calories ?? 0}
-              onChange={event =>
-                setTrainingDraft(prev =>
-                  prev ? { ...prev, calories: Number(event.target.value) } : prev
-                )
-              }
-            />
+            <label className="text-sm font-semibold text-slate-600">
+              Калории (расчёт): {estimateTraining(trainingDraft).toFixed(0)} ккал
+            </label>
             <label className="text-sm font-semibold text-slate-600">Дата и время</label>
             <input
               type="datetime-local"
@@ -1259,17 +1316,9 @@ const TrackPage = () => {
                 )
               }
             />
-            <label className="text-sm font-semibold text-slate-600">Калории</label>
-            <input
-              type="number"
-              className="input"
-              value={movementDraft.calories ?? 0}
-              onChange={event =>
-                setMovementDraft(prev =>
-                  prev ? { ...prev, calories: Number(event.target.value) } : prev
-                )
-              }
-            />
+            <label className="text-sm font-semibold text-slate-600">
+              Калории (расчёт): {estimateMovement(movementDraft).toFixed(0)} ккал
+            </label>
             <label className="text-sm font-semibold text-slate-600">Дистанция (км)</label>
             <input
               type="number"

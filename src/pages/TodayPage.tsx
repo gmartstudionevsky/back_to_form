@@ -6,14 +6,15 @@ import { useAppStore } from '../store/useAppStore';
 import { combineDateTime, currentTimeString, formatDate, todayISO } from '../utils/date';
 import { calcFoodEntry, calcMealPlanItem, calcRecipeNutrition } from '../utils/nutrition';
 import {
-  calcMovementSessionCoefficient,
+  calcMovementActivityMetrics,
   calcPlannedWorkoutCoefficient,
   calcProtocolDurationMinutes,
   calcStepsCoefficient,
-  calcTrainingLogCoefficient,
+  calcTrainingActivityMetrics,
   resolveActivityDefaults
 } from '../utils/activity';
 import {
+  ActivityLog,
   FoodEntry,
   GeoPoint,
   MealComponent,
@@ -138,7 +139,6 @@ const TodayPage = () => {
     minutes: 45,
     sets: 0,
     reps: 0,
-    calories: 0,
     time: currentTimeString()
   });
   const [movementDraft, setMovementDraft] = useState<MovementSessionLog | null>(null);
@@ -148,7 +148,6 @@ const TodayPage = () => {
   const [movementPlannedFlights, setMovementPlannedFlights] = useState(10);
   const [movementSteps, setMovementSteps] = useState(0);
   const [movementDurationMinutes, setMovementDurationMinutes] = useState(20);
-  const [movementCalories, setMovementCalories] = useState(0);
   const [movementTimer, setMovementTimer] = useState({
     running: false,
     startedAt: 0,
@@ -311,13 +310,30 @@ const TodayPage = () => {
     0
   );
   const trainingMinutes = trainingLogs.reduce((sum, log) => sum + log.minutes, 0);
+  const resolveTrainingProtocol = (log: ActivityLog) =>
+    log.protocolRef
+      ? data.library.protocols.find(item => item.id === log.protocolRef)
+      : undefined;
+
   const activityCoefficient = [
-    trainingLogs.reduce((sum, log) => sum + calcTrainingLogCoefficient(log, activityDefaults), 0),
+    trainingLogs.reduce((sum, log) => {
+      const protocol = resolveTrainingProtocol(log);
+      return (
+        sum +
+        calcTrainingActivityMetrics(log, activityDefaults, {}, {
+          protocol,
+          exercises: data.library.exercises
+        }).coefficient
+      );
+    }, 0),
     movementSessions.reduce((sum, log) => {
       const activity = data.library.movementActivities.find(item => item.id === log.activityRef);
-      return sum + calcMovementSessionCoefficient(log, activity, activityDefaults, {
-        includeSteps: !movementDaySteps
-      });
+      return (
+        sum +
+        calcMovementActivityMetrics(log, activity, activityDefaults, {}, {
+          includeSteps: !movementDaySteps
+        }).coefficient
+      );
     }, 0),
     calcStepsCoefficient(movementDaySteps ?? 0, activityDefaults)
   ].reduce((sum, value) => sum + value, 0);
@@ -376,6 +392,13 @@ const TodayPage = () => {
     setSelectedDate(date.toISOString().slice(0, 10));
   };
 
+  const resolveWeightForDateTime = (dateTime: string) =>
+    data.logs.weight
+      .filter(log => log.dateTime <= dateTime)
+      .sort((a, b) => a.dateTime.localeCompare(b.dateTime))
+      .slice(-1)[0]?.weightKg;
+
+
   const resolveFoodTags = (draft: typeof foodForm) => {
     const tags = draft.nutritionTags.length ? [...draft.nutritionTags] : [];
     if (draft.kind === 'product' && draft.refId) {
@@ -419,6 +442,33 @@ const TodayPage = () => {
   };
 
   const toDateTime = (date: string, time?: string) => combineDateTime(date, time);
+
+  const activityContext = {
+    weightKg: resolveWeightForDateTime(toDateTime(selectedDate)),
+    intakeKcal: totals.kcal,
+    activityCoefficient
+  };
+
+  const estimateTraining = (log: {
+    minutes: number;
+    sets?: number;
+    reps?: number;
+    protocolRef?: string;
+  }) =>
+    calcTrainingActivityMetrics(log as ActivityLog, activityDefaults, activityContext, {
+      protocol: log.protocolRef
+        ? data.library.protocols.find(item => item.id === log.protocolRef)
+        : undefined,
+      exercises: data.library.exercises
+    }).calories;
+
+  const estimateMovement = (log: MovementSessionLog) => {
+    const activity = data.library.movementActivities.find(item => item.id === log.activityRef);
+    return calcMovementActivityMetrics(log, activity, activityDefaults, {
+      ...activityContext,
+      weightKg: resolveWeightForDateTime(log.dateTime)
+    }).calories;
+  };
 
   const getPlannedMealTime = (meal: FoodEntry['meal'], time?: string) =>
     time?.trim() ? time : getDefaultMealTime(meal);
@@ -748,6 +798,7 @@ const TodayPage = () => {
     if (!movementDraft) return;
     const payload = {
       ...movementDraft,
+      calories: estimateMovement(movementDraft) || undefined,
       timeOfDay: getTimeOfDayFromDateTime(movementDraft.dateTime)
     };
     if (movementDraft.id) {
@@ -796,17 +847,20 @@ const TodayPage = () => {
         ? Math.round(calcDistanceKm(movementStartLocation, endLocation) * 100) / 100
         : undefined;
     const activity = data.library.movementActivities.find(item => item.id === movementActivityId);
-    addMovementSessionLog({
+    const log = {
       id: '',
       dateTime: new Date(startedAt).toISOString(),
       activityRef: movementActivityId,
       durationMinutes,
       distanceKm,
-      calories: movementCalories || undefined,
       startLocation: movementStartLocation ?? undefined,
       endLocation: endLocation ?? undefined,
       plannedFlights: activity?.kind === 'stairs' ? movementPlannedFlights : undefined,
       timeOfDay: getTimeOfDayFromDateTime(new Date(startedAt).toISOString())
+    };
+    addMovementSessionLog({
+      ...log,
+      calories: estimateMovement(log) || undefined
     });
     setMovementTimer({ running: false, startedAt: 0, elapsedSec: 0, durationSec: 0 });
     setMovementStartLocation(null);
@@ -1706,17 +1760,17 @@ const TodayPage = () => {
                   />
                 </label>
                 <label className="text-xs text-slate-500">
-                  Калории
-                  <input
-                    type="number"
-                    className="input mt-1"
-                    min={0}
-                    value={movementCalories}
-                    onChange={event => {
-                      const value = Number(event.target.value);
-                      setMovementCalories(Number.isFinite(value) ? value : 0);
-                    }}
-                  />
+                  Калории (расчёт):{' '}
+                  <span className="text-slate-700">
+                    {estimateMovement({
+                      id: '',
+                      dateTime: toDateTime(selectedDate),
+                      activityRef: movementActivityId,
+                      durationMinutes: movementDurationMinutes,
+                      plannedFlights: movementPlannedFlights
+                    }).toFixed(0)}{' '}
+                    ккал
+                  </span>
                 </label>
                 {data.library.movementActivities.find(item => item.id === movementActivityId)
                   ?.kind === 'stairs' ? (
@@ -2539,15 +2593,9 @@ const TodayPage = () => {
             setTrainingForm(prev => ({ ...prev, reps: Number(event.target.value) }))
           }
         />
-        <label className="text-sm font-semibold text-slate-600">Калории</label>
-        <input
-          type="number"
-          className="input"
-          value={trainingForm.calories}
-          onChange={event =>
-            setTrainingForm(prev => ({ ...prev, calories: Number(event.target.value) }))
-          }
-        />
+        <label className="text-sm font-semibold text-slate-600">
+          Калории (расчёт): {estimateTraining(trainingForm).toFixed(0)} ккал
+        </label>
         <label className="text-sm font-semibold text-slate-600">Время</label>
         <input
           type="time"
@@ -2565,7 +2613,7 @@ const TodayPage = () => {
               minutes: trainingForm.minutes,
               sets: trainingForm.sets || undefined,
               reps: trainingForm.reps || undefined,
-              calories: trainingForm.calories || undefined,
+              calories: estimateTraining(trainingForm) || undefined,
               timeOfDay: getTimeOfDayFromTime(trainingForm.time)
             });
             setSheet(null);
@@ -2620,17 +2668,9 @@ const TodayPage = () => {
                 )
               }
             />
-            <label className="text-sm font-semibold text-slate-600">Калории</label>
-            <input
-              type="number"
-              className="input"
-              value={movementDraft.calories ?? 0}
-              onChange={event =>
-                setMovementDraft(prev =>
-                  prev ? { ...prev, calories: Number(event.target.value) } : prev
-                )
-              }
-            />
+            <label className="text-sm font-semibold text-slate-600">
+              Калории (расчёт): {estimateMovement(movementDraft).toFixed(0)} ккал
+            </label>
             <label className="text-sm font-semibold text-slate-600">Дистанция (км)</label>
             <input
               type="number"

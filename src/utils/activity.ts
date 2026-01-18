@@ -33,14 +33,13 @@ export const calcStepsCoefficient = (steps: number, defaults: ActivityDefaults) 
 export const calcTrainingLogCoefficient = (log: ActivityLog, defaults: ActivityDefaults) =>
   log.minutes * defaults.workoutPerMinute +
   (log.sets ?? 0) * defaults.set +
-  (log.reps ?? 0) * defaults.rep +
-  (log.calories ?? 0) * defaults.kcal;
+  (log.reps ?? 0) * defaults.rep;
 
 export const calcMovementSessionCoefficient = (
   log: MovementSessionLog,
   activity: MovementActivity | undefined,
   defaults: ActivityDefaults,
-  options: { includeSteps?: boolean } = {}
+  options: { includeSteps?: boolean; includeCalories?: boolean } = {}
 ) => {
   const metrics = activity?.activityMetrics ?? {};
   const perMinute = metrics.perMinute ?? defaults.movementPerMinute;
@@ -51,7 +50,7 @@ export const calcMovementSessionCoefficient = (
   const distance = log.distanceKm ?? 0;
   const flights = log.actualFlights ?? log.plannedFlights ?? 0;
   const steps = options.includeSteps ? log.steps ?? 0 : 0;
-  const calories = log.calories ?? 0;
+  const calories = options.includeCalories ? log.calories ?? 0 : 0;
   return (
     log.durationMinutes * perMinute +
     distance * perKm +
@@ -59,6 +58,97 @@ export const calcMovementSessionCoefficient = (
     steps * perStep +
     calories * perKcal
   );
+};
+
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+export type ActivityCaloriesContext = {
+  weightKg?: number;
+  intakeKcal?: number;
+  activityCoefficient?: number;
+  bodyFatPercent?: number;
+  muscleMassKg?: number;
+  bodyWaterPercent?: number;
+};
+
+const calcAdjustedCalories = (
+  coefficient: number,
+  perKcal: number,
+  context: ActivityCaloriesContext = {}
+) => {
+  if (!perKcal || coefficient <= 0) return 0;
+  const baseCalories = coefficient / perKcal;
+  const weightFactor = context.weightKg
+    ? clamp(context.weightKg / 70, 0.7, 1.3)
+    : 1;
+  const intakeFactor = context.intakeKcal
+    ? clamp(context.intakeKcal / 2000, 0.85, 1.15)
+    : 1;
+  const activityFactor = context.activityCoefficient
+    ? clamp(1 + context.activityCoefficient * 0.05, 0.9, 1.2)
+    : 1;
+  const bodyFatFactor =
+    context.bodyFatPercent !== undefined
+      ? clamp(1 - (context.bodyFatPercent - 20) * 0.003, 0.9, 1.1)
+      : 1;
+  const muscleMassFactor =
+    context.muscleMassKg !== undefined
+      ? clamp(1 + (context.muscleMassKg - 30) * 0.002, 0.9, 1.1)
+      : 1;
+  const bodyWaterFactor =
+    context.bodyWaterPercent !== undefined
+      ? clamp(1 + (context.bodyWaterPercent - 55) * 0.002, 0.95, 1.05)
+      : 1;
+  return Math.max(
+    0,
+    Math.round(
+      baseCalories *
+        weightFactor *
+        intakeFactor *
+        activityFactor *
+        bodyFatFactor *
+        muscleMassFactor *
+        bodyWaterFactor
+    )
+  );
+};
+
+type TrainingMetricsOptions = {
+  protocol?: Protocol;
+  exercises?: Exercise[];
+};
+
+export const calcTrainingActivityMetrics = (
+  log: ActivityLog,
+  defaults: ActivityDefaults,
+  context: ActivityCaloriesContext = {},
+  options: TrainingMetricsOptions = {}
+) => {
+  const coefficient = options.protocol
+    ? calcProtocolCoefficient(
+        options.protocol,
+        options.exercises ?? [],
+        defaults,
+        log.minutes
+      )
+    : calcTrainingLogCoefficient(log, defaults);
+  const calories = calcAdjustedCalories(coefficient, defaults.kcal, context);
+  return { coefficient, calories };
+};
+
+export const calcMovementActivityMetrics = (
+  log: MovementSessionLog,
+  activity: MovementActivity | undefined,
+  defaults: ActivityDefaults,
+  context: ActivityCaloriesContext = {},
+  options: { includeSteps?: boolean } = {}
+) => {
+  const coefficient = calcMovementSessionCoefficient(log, activity, defaults, {
+    includeSteps: options.includeSteps
+  });
+  const perKcal = activity?.activityMetrics?.perKcal ?? defaults.kcal;
+  const calories = calcAdjustedCalories(coefficient, perKcal, context);
+  return { coefficient, calories };
 };
 
 export const calcProtocolDurationMinutes = (protocol?: Protocol) => {
