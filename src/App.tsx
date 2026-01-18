@@ -4,6 +4,9 @@ import TodayPage from './pages/TodayPage';
 import PlanPage from './pages/PlanPage';
 import TrackPage from './pages/TrackPage';
 import LibraryPage from './pages/LibraryPage';
+import NutritionPage from './pages/NutritionPage';
+import ActivityPage from './pages/ActivityPage';
+import HealthPage from './pages/HealthPage';
 import ProgressPage from './pages/ProgressPage';
 import PhotosPage from './pages/PhotosPage';
 import SettingsPage from './pages/SettingsPage';
@@ -16,6 +19,9 @@ const App = () => {
         <Routes>
           <Route path="/" element={<TodayPage />} />
           <Route path="/plan" element={<PlanPage />} />
+          <Route path="/nutrition" element={<NutritionPage />} />
+          <Route path="/activity" element={<ActivityPage />} />
+          <Route path="/health" element={<HealthPage />} />
           <Route path="/track" element={<TrackPage />} />
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/more" element={<MorePage />} />
