@@ -231,7 +231,9 @@ export const seedData: AppData = {
         fatPer100g: 5,
         carbPer100g: 4,
         nutritionTags: ['snack', 'healthy'],
-        portionPresets: [{ label: '1 стакан', grams: 200 }]
+        portionPresets: [{ label: '1 стакан', grams: 200 }],
+        hydrationContribution: true,
+        notes: 'Подходит для быстрого перекуса.'
       },
       {
         id: 'prod-cottage',
@@ -250,7 +252,8 @@ export const seedData: AppData = {
         fatPer100g: 3,
         carbPer100g: 4,
         nutritionTags: ['snack', 'healthy'],
-        portionPresets: [{ label: '250 мл', grams: 250 }]
+        portionPresets: [{ label: '250 мл', grams: 250 }],
+        hydrationContribution: true
       },
       {
         id: 'prod-rice',
@@ -332,7 +335,37 @@ export const seedData: AppData = {
         name: 'Яблоко (approx)',
         kcalPer100g: 52,
         nutritionTags: ['snack', 'healthy'],
-        portionPresets: [{ label: '1 яблоко', grams: 150 }]
+        portionPresets: [{ label: '1 яблоко', grams: 150 }],
+        hydrationContribution: true
+      },
+      {
+        id: 'prod-oats',
+        name: 'Овсянка (сухая, approx)',
+        kcalPer100g: 370,
+        proteinPer100g: 13,
+        fatPer100g: 6,
+        carbPer100g: 62,
+        nutritionTags: ['healthy'],
+        portionPresets: [{ label: '40 г', grams: 40 }],
+        notes: 'База для каши или батончиков.'
+      },
+      {
+        id: 'prod-honey',
+        name: 'Мёд (approx)',
+        kcalPer100g: 304,
+        carbPer100g: 82,
+        nutritionTags: ['snack'],
+        portionPresets: [{ label: '1 ч.л.', grams: 12 }]
+      },
+      {
+        id: 'prod-dark-chocolate',
+        name: 'Тёмный шоколад (approx)',
+        kcalPer100g: 540,
+        fatPer100g: 30,
+        carbPer100g: 50,
+        nutritionTags: ['cheat', 'snack'],
+        portionPresets: [{ label: '20 г', grams: 20 }],
+        notes: 'Использовать как читмил.'
       },
       {
         id: 'prod-olive-oil',
@@ -440,6 +473,53 @@ export const seedData: AppData = {
         tags: ['завтрак'],
         category: 'breakfast',
         nutritionTags: ['healthy']
+      },
+      {
+        id: 'rec-oatmeal',
+        name: 'Овсянка с яблоком',
+        servings: 1,
+        ingredients: [
+          { productRef: 'prod-oats', grams: 40 },
+          { productRef: 'prod-apple', grams: 80 },
+          { productRef: 'prod-honey', grams: 8 }
+        ],
+        steps: ['Сварить овсянку.', 'Добавить яблоко и мёд.'],
+        notes: 'Можно добавить корицу.',
+        tags: ['завтрак'],
+        category: 'breakfast',
+        complexity: 'easy',
+        nutritionTags: ['healthy']
+      },
+      {
+        id: 'rec-yogurt-dessert',
+        name: 'Творожно-йогуртовый десерт',
+        servings: 2,
+        ingredients: [
+          { productRef: 'prod-greek-yogurt', grams: 200 },
+          { productRef: 'prod-cottage', grams: 160 },
+          { productRef: 'prod-dark-chocolate', grams: 20 }
+        ],
+        steps: ['Смешать йогурт и творог.', 'Добавить стружку шоколада.'],
+        notes: 'Баланс сладкого и белка.',
+        tags: ['перекус', 'десерт'],
+        category: 'dessert',
+        complexity: 'easy',
+        nutritionTags: ['snack', 'cheat']
+      },
+      {
+        id: 'rec-smoothie',
+        name: 'Смузи банан + кефир',
+        servings: 1,
+        ingredients: [
+          { productRef: 'prod-banana', grams: 120 },
+          { productRef: 'prod-kefir', grams: 200 }
+        ],
+        steps: ['Смешать в блендере 30 секунд.'],
+        tags: ['напиток'],
+        category: 'drink',
+        complexity: 'easy',
+        nutritionTags: ['snack'],
+        hydrationContribution: true
       }
     ],
     drinks: [
@@ -603,14 +683,41 @@ export const seedData: AppData = {
         id: 'day-2026-01-16',
         date: '2026-01-16',
         periodId: 'period-s0',
-        tasks: [],
+        tasks: [
+          {
+            id: 'task-16-warmup',
+            templateRef: 'tpl-warmup',
+            status: 'planned',
+            assignedRefs: [{ kind: 'protocol', refId: 'proto-r10-warmup' }],
+            target: { minutes: 10 },
+            timeOfDay: 'morning',
+            notes: 'Разогрев перед силовой.'
+          },
+          {
+            id: 'task-16-nutrition',
+            templateRef: 'tpl-nutrition',
+            status: 'planned',
+            assignedRefs: [{ kind: 'rule', refId: 'rule-no-delivery' }],
+            target: { meals: 3 },
+            timeOfDay: 'day'
+          },
+          {
+            id: 'task-16-sleep',
+            templateRef: 'tpl-sleep',
+            status: 'planned',
+            target: { wake: '07:30' },
+            timeOfDay: 'evening'
+          }
+        ],
         mealsPlan: {
           breakfast: [
             {
               id: 'plan-16-breakfast-1',
               kind: 'dish',
               refId: 'rec-omelet',
-              plannedServings: 1
+              plannedServings: 1,
+              plannedTime: '08:00',
+              notes: 'Белок + овощи'
             }
           ],
           lunch: [
@@ -618,7 +725,8 @@ export const seedData: AppData = {
               id: 'plan-16-lunch-1',
               kind: 'dish',
               refId: 'rec-turkey-patties',
-              plannedServings: 1
+              plannedServings: 1,
+              plannedTime: '13:30'
             },
             {
               id: 'plan-16-lunch-2',
@@ -646,9 +754,65 @@ export const seedData: AppData = {
               id: 'plan-16-snack-1',
               kind: 'product',
               refId: 'prod-greek-yogurt',
-              plannedGrams: 200
+              plannedGrams: 200,
+              plannedTime: '16:30',
+              notes: 'Перекус после работы.'
             }
           ]
+        },
+        mealComponents: {
+          breakfast: [
+            {
+              id: 'cmp-16-breakfast-1',
+              type: 'main',
+              recipeRef: 'rec-omelet',
+              portion: '1 порция'
+            }
+          ],
+          lunch: [
+            {
+              id: 'cmp-16-lunch-1',
+              type: 'main',
+              recipeRef: 'rec-turkey-patties',
+              portion: '1 порция'
+            },
+            {
+              id: 'cmp-16-lunch-2',
+              type: 'side',
+              recipeRef: 'rec-cooked-buckwheat',
+              portion: '1 порция'
+            }
+          ],
+          dinner: [
+            {
+              id: 'cmp-16-dinner-1',
+              type: 'main',
+              recipeRef: 'rec-baked-fish',
+              portion: '1 порция'
+            },
+            {
+              id: 'cmp-16-dinner-2',
+              type: 'salad',
+              recipeRef: 'rec-salad',
+              portion: '1 порция',
+              extra: true
+            }
+          ],
+          snack: [
+            {
+              id: 'cmp-16-snack-1',
+              type: 'snack',
+              recipeRef: 'rec-yogurt-dessert',
+              portion: '1 порция',
+              notes: 'Если нужен сладкий вариант.'
+            }
+          ]
+        },
+        mealTimes: {
+          breakfast: '08:00',
+          lunch: '13:30',
+          dinner: '19:00',
+          snack: '16:30'
         },
         workoutsPlan: [
           {
@@ -656,23 +820,33 @@ export const seedData: AppData = {
             timeOfDay: 'morning',
             protocolRef: 'proto-r10-warmup',
             isRequired: true,
-            kind: 'workout'
+            kind: 'workout',
+            plannedTime: '08:15'
           },
           {
             id: 'plan-16-movement-1',
             timeOfDay: 'day',
             plannedMinutes: 10,
-            kind: 'movement'
+            kind: 'movement',
+            movementActivityRef: 'move-march',
+            plannedTime: '12:30'
           },
           {
             id: 'plan-16-workout-2',
             timeOfDay: 'evening',
             protocolRef: 'proto-s0-str',
             isRequired: true,
-            kind: 'workout'
+            kind: 'workout',
+            plannedTime: '18:30'
           }
         ],
         plannedSteps: 8000,
+        activityTargets: {
+          steps: 8000,
+          trainingMinutes: 30,
+          movementMinutes: 15,
+          coefficient: 1.1
+        },
         nutritionTargets: {
           kcal: 1800,
           protein: 130,
@@ -688,20 +862,42 @@ export const seedData: AppData = {
           kcalTarget: 1800,
           sleepWakeTarget: '07:30',
           sleepDurationTargetMinutes: 450
-        }
+        },
+        notes: 'Стартовый день с фокусом на разминку и базовое питание.'
       },
       {
         id: 'day-2026-01-17',
         date: '2026-01-17',
         periodId: 'period-s0',
-        tasks: [],
+        tasks: [
+          {
+            id: 'task-17-strength',
+            templateRef: 'tpl-strength',
+            status: 'planned',
+            assignedRefs: [{ kind: 'protocol', refId: 'proto-s0-str' }],
+            target: { rounds: 2 },
+            timeOfDay: 'evening'
+          },
+          {
+            id: 'task-17-smoking',
+            templateRef: 'tpl-smoking',
+            status: 'planned',
+            assignedRefs: [
+              { kind: 'rule', refId: 'rule-delay-cigarette' },
+              { kind: 'rule', refId: 'rule-water-breaths' }
+            ],
+            target: { max: 5 },
+            timeOfDay: 'day'
+          }
+        ],
         mealsPlan: {
           breakfast: [
             {
               id: 'plan-17-breakfast-1',
               kind: 'dish',
               refId: 'rec-omelet',
-              plannedServings: 1
+              plannedServings: 1,
+              plannedTime: '08:10'
             }
           ],
           lunch: [
@@ -709,7 +905,8 @@ export const seedData: AppData = {
               id: 'plan-17-lunch-1',
               kind: 'dish',
               refId: 'rec-baked-chicken',
-              plannedServings: 1
+              plannedServings: 1,
+              plannedTime: '13:20'
             },
             {
               id: 'plan-17-lunch-2',
@@ -729,10 +926,75 @@ export const seedData: AppData = {
               id: 'plan-17-dinner-2',
               kind: 'dish',
               refId: 'rec-salad',
-              plannedServings: 1
+              plannedServings: 1,
+              plannedTime: '19:00'
             }
           ],
-          snack: []
+          snack: [
+            {
+              id: 'plan-17-snack-1',
+              kind: 'free',
+              title: 'Фруктовый перекус',
+              plannedKcal: 180,
+              plannedProtein: 3,
+              plannedFat: 1,
+              plannedCarb: 40,
+              plannedTime: '16:00',
+              notes: 'Выбрать сезонный фрукт.'
+            }
+          ]
+        },
+        mealComponents: {
+          breakfast: [
+            {
+              id: 'cmp-17-breakfast-1',
+              type: 'main',
+              recipeRef: 'rec-omelet',
+              portion: '1 порция'
+            }
+          ],
+          lunch: [
+            {
+              id: 'cmp-17-lunch-1',
+              type: 'main',
+              recipeRef: 'rec-baked-chicken',
+              portion: '1 порция'
+            },
+            {
+              id: 'cmp-17-lunch-2',
+              type: 'side',
+              recipeRef: 'rec-cooked-rice',
+              portion: '1 порция'
+            }
+          ],
+          dinner: [
+            {
+              id: 'cmp-17-dinner-1',
+              type: 'main',
+              recipeRef: 'rec-baked-fish',
+              portion: '1 порция'
+            },
+            {
+              id: 'cmp-17-dinner-2',
+              type: 'salad',
+              recipeRef: 'rec-salad',
+              portion: '1 порция'
+            }
+          ],
+          snack: [
+            {
+              id: 'cmp-17-snack-1',
+              type: 'snack',
+              portion: '1 порция',
+              notes: 'Свободный вариант.'
+            }
+          ]
+        },
+        mealTimes: {
+          breakfast: '08:10',
+          lunch: '13:20',
+          dinner: '19:00',
+          snack: '16:00'
         },
         workoutsPlan: [
           {
@@ -740,23 +1002,33 @@ export const seedData: AppData = {
             timeOfDay: 'morning',
             protocolRef: 'proto-r10-warmup',
             isRequired: true,
-            kind: 'workout'
+            kind: 'workout',
+            plannedTime: '08:30'
           },
           {
             id: 'plan-17-movement-1',
             timeOfDay: 'day',
             plannedMinutes: 15,
-            kind: 'movement'
+            kind: 'movement',
+            movementActivityRef: 'move-stairs',
+            plannedTime: '12:40'
           },
           {
             id: 'plan-17-workout-2',
             timeOfDay: 'evening',
             protocolRef: 'proto-s0-str',
             isRequired: true,
-            kind: 'workout'
+            kind: 'workout',
+            plannedTime: '18:40'
           }
         ],
         plannedSteps: 9000,
+        activityTargets: {
+          steps: 9000,
+          trainingMinutes: 35,
+          movementMinutes: 20,
+          coefficient: 1.15
+        },
         nutritionTargets: {
           kcal: 1800,
           protein: 130,
@@ -772,20 +1044,38 @@ export const seedData: AppData = {
           kcalTarget: 1800,
           sleepWakeTarget: '07:30',
           sleepDurationTargetMinutes: 450
-        }
+        },
+        notes: 'Добавлен свободный перекус и тренировка лестницы.'
       },
       {
         id: 'day-2026-01-18',
         date: '2026-01-18',
         periodId: 'period-s0',
-        tasks: [],
+        tasks: [
+          {
+            id: 'task-18-measure',
+            templateRef: 'tpl-measurement',
+            status: 'planned',
+            target: { weight: 'kg', waist: 'cm' },
+            timeOfDay: 'morning'
+          },
+          {
+            id: 'task-18-move',
+            templateRef: 'tpl-movement',
+            status: 'planned',
+            target: { minutes: 20 },
+            timeOfDay: 'day'
+          }
+        ],
         mealsPlan: {
           breakfast: [
             {
               id: 'plan-18-breakfast-1',
               kind: 'product',
               refId: 'prod-eggs',
-              plannedGrams: 150
+              plannedGrams: 150,
+              plannedTime: '08:15',
+              notes: 'Варёные яйца.'
             }
           ],
           lunch: [
@@ -793,7 +1083,8 @@ export const seedData: AppData = {
               id: 'plan-18-lunch-1',
               kind: 'dish',
               refId: 'rec-turkey-patties',
-              plannedServings: 1
+              plannedServings: 1,
+              plannedTime: '13:00'
             },
             {
               id: 'plan-18-lunch-2',
@@ -813,7 +1104,8 @@ export const seedData: AppData = {
               id: 'plan-18-dinner-2',
               kind: 'dish',
               refId: 'rec-salad',
-              plannedServings: 1
+              plannedServings: 1,
+              plannedTime: '19:10'
             }
           ],
           snack: [
@@ -821,9 +1113,74 @@ export const seedData: AppData = {
               id: 'plan-18-snack-1',
               kind: 'product',
               refId: 'prod-apple',
-              plannedGrams: 150
+              plannedGrams: 150,
+              plannedTime: '16:10'
+            },
+            {
+              id: 'plan-18-snack-2',
+              kind: 'cheat',
+              title: 'Тёмный шоколад',
+              plannedKcal: 110,
+              plannedProtein: 2,
+              plannedFat: 8,
+              plannedCarb: 10,
+              cheatCategory: 'sweets',
+              nutritionTags: ['cheat', 'snack'],
+              plannedTime: '20:30'
             }
           ]
+        },
+        mealComponents: {
+          breakfast: [
+            {
+              id: 'cmp-18-breakfast-1',
+              type: 'main',
+              portion: '2 яйца'
+            }
+          ],
+          lunch: [
+            {
+              id: 'cmp-18-lunch-1',
+              type: 'main',
+              recipeRef: 'rec-turkey-patties',
+              portion: '1 порция'
+            },
+            {
+              id: 'cmp-18-lunch-2',
+              type: 'side',
+              recipeRef: 'rec-cooked-buckwheat',
+              portion: '1 порция'
+            }
+          ],
+          dinner: [
+            {
+              id: 'cmp-18-dinner-1',
+              type: 'main',
+              recipeRef: 'rec-baked-chicken',
+              portion: '1 порция'
+            },
+            {
+              id: 'cmp-18-dinner-2',
+              type: 'drink',
+              recipeRef: 'rec-smoothie',
+              portion: '250 мл'
+            }
+          ],
+          snack: [
+            {
+              id: 'cmp-18-snack-1',
+              type: 'dessert',
+              recipeRef: 'rec-yogurt-dessert',
+              portion: '1 порция',
+              extra: true
+            }
+          ]
+        },
+        mealTimes: {
+          breakfast: '08:15',
+          lunch: '13:00',
+          dinner: '19:10',
+          snack: '16:10'
         },
         workoutsPlan: [
           {
@@ -831,16 +1188,25 @@ export const seedData: AppData = {
             timeOfDay: 'morning',
             protocolRef: 'proto-r10-warmup',
             isRequired: true,
-            kind: 'workout'
+            kind: 'workout',
+            plannedTime: '08:40'
           },
           {
             id: 'plan-18-movement-1',
             timeOfDay: 'day',
             plannedMinutes: 20,
-            kind: 'movement'
+            kind: 'movement',
+            movementActivityRef: 'move-run',
+            plannedTime: '12:30'
           }
         ],
         plannedSteps: 7000,
+        activityTargets: {
+          steps: 7000,
+          movementMinutes: 20,
+          distanceKm: 3,
+          coefficient: 1
+        },
         nutritionTargets: {
           kcal: 1750,
           protein: 125,
@@ -856,7 +1222,8 @@ export const seedData: AppData = {
           kcalTarget: 1750,
           sleepWakeTarget: '07:00',
           sleepDurationTargetMinutes: 435
-        }
+        },
+        notes: 'День с измерениями и читмилом.'
       }
     ]
   },
