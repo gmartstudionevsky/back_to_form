@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { BottomSheet } from '../components/BottomSheet';
 import { useAppStore } from '../store/useAppStore';
 import {
+  DayPlan,
   FoodEntry,
   MealPlanItem,
   NutritionTag,
@@ -10,6 +11,7 @@ import {
   WorkoutPlanItem
 } from '../types';
 import { calcMealPlanItem } from '../utils/nutrition';
+import { todayISO } from '../utils/date';
 import {
   getDefaultMealTime,
   getDefaultTimeForTimeOfDay,
@@ -17,7 +19,7 @@ import {
   timeOfDayLabels
 } from '../utils/timeOfDay';
 
-const tabs = ['Периоды', 'Рацион'] as const;
+const tabs = ['Обзор', 'Периоды', 'Рацион', 'Активность'] as const;
 
 type Tab = (typeof tabs)[number];
 
@@ -61,7 +63,7 @@ const nutritionTagLabels: Record<NutritionTag, string> = {
 
 const PlanPage = () => {
   const { data, updateData, createOrGetDayPlan } = useAppStore();
-  const [activeTab, setActiveTab] = useState<Tab>('Периоды');
+  const [activeTab, setActiveTab] = useState<Tab>('Обзор');
   const [name, setName] = useState('Новый период');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -78,6 +80,9 @@ const PlanPage = () => {
   const canCopyMenu = Boolean(
     menuCopy.sourceDate && menuCopy.startDate && menuCopy.endDate && menuCopy.startDate <= menuCopy.endDate
   );
+
+  const todayDate = todayISO();
+  const todayPlan = data.planner.dayPlans.find(plan => plan.date === todayDate);
 
   const addPeriod = () => {
     if (!canAddPeriod) return;
@@ -141,6 +146,17 @@ const PlanPage = () => {
         },
         { kcal: 0, protein: 0, fat: 0, carb: 0 }
       );
+  };
+
+  const summarizePlan = (plan?: DayPlan) => {
+    if (!plan) return { meals: 0, workouts: 0, tasks: 0, kcal: 0 };
+    const meals = Object.values(plan.mealsPlan).flat().length;
+    const workouts = plan.workoutsPlan.length;
+    const tasks = plan.tasks?.length ?? 0;
+    const kcal = Object.values(plan.mealsPlan)
+      .flat()
+      .reduce((sum, item) => sum + calcMealPlanItem(item, data.library).kcal, 0);
+    return { meals, workouts, tasks, kcal };
   };
 
   const addMealToPlan = () => {
@@ -334,10 +350,26 @@ const PlanPage = () => {
     });
   };
 
+  const periodStats = useMemo(() => {
+    if (!selectedPeriod) return { days: 0, plannedDays: 0, workouts: 0, meals: 0 };
+    const plans = data.planner.dayPlans.filter(plan => plan.date >= selectedPeriod.startDate && plan.date <= selectedPeriod.endDate);
+    const meals = plans.reduce((sum, plan) => sum + summarizePlan(plan).meals, 0);
+    const workouts = plans.reduce((sum, plan) => sum + plan.workoutsPlan.length, 0);
+    return {
+      days: dayList.length,
+      plannedDays: plans.length,
+      workouts,
+      meals
+    };
+  }, [data.planner.dayPlans, dayList.length, selectedPeriod]);
+
   return (
     <section className="space-y-4">
       <header className="space-y-2">
-        <h1 className="text-2xl font-bold">План</h1>
+        <h1 className="text-2xl font-bold">Планирование</h1>
+        <p className="text-sm text-slate-500">
+          Формируйте план на периоды, дни и направления — питание, активность и привычки.
+        </p>
         <div className="control-row">
           {tabs.map(tab => (
             <button
@@ -352,6 +384,75 @@ const PlanPage = () => {
           ))}
         </div>
       </header>
+
+      {activeTab === 'Обзор' && (
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="card p-4 space-y-2">
+              <p className="text-xs font-semibold uppercase text-slate-400">Сегодня</p>
+              <p className="text-lg font-semibold">{todayDate}</p>
+              <p className="text-xs text-slate-500">
+                Приёмов: {summarizePlan(todayPlan).meals} · Активностей:{' '}
+                {summarizePlan(todayPlan).workouts}
+              </p>
+              <button className="btn-secondary w-full" onClick={() => openDayEditor(todayDate)}>
+                Открыть редактор дня
+              </button>
+            </div>
+            <div className="card p-4 space-y-2">
+              <p className="text-xs font-semibold uppercase text-slate-400">Период</p>
+              <p className="text-lg font-semibold">{selectedPeriod?.name ?? 'Не выбран'}</p>
+              <p className="text-xs text-slate-500">
+                Дней: {periodStats.days} · Запланировано: {periodStats.plannedDays}
+              </p>
+              <button className="btn-secondary w-full" onClick={() => setActiveTab('Периоды')}>
+                Управлять периодами
+              </button>
+            </div>
+            <div className="card p-4 space-y-2">
+              <p className="text-xs font-semibold uppercase text-slate-400">Рацион</p>
+              <p className="text-lg font-semibold">{summarizePlan(todayPlan).kcal.toFixed(0)} ккал</p>
+              <p className="text-xs text-slate-500">Планирование меню и целей</p>
+              <button className="btn-secondary w-full" onClick={() => setActiveTab('Рацион')}>
+                Настроить меню
+              </button>
+            </div>
+          </div>
+
+          {selectedPeriod ? (
+            <div className="card p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="section-title">Дни периода</h2>
+                <span className="text-xs text-slate-400">
+                  Тренировок: {periodStats.workouts} · Приёмов: {periodStats.meals}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {dayList.slice(0, 8).map(date => {
+                  const plan = data.planner.dayPlans.find(item => item.date === date);
+                  const summary = summarizePlan(plan);
+                  return (
+                    <button
+                      key={date}
+                      className="rounded-xl border border-slate-200 p-3 text-left text-xs"
+                      onClick={() => openDayEditor(date)}
+                    >
+                      <p className="text-sm font-semibold">{date}</p>
+                      <p className="text-slate-500">
+                        Питание: {summary.meals} · Активность: {summary.workouts}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="card p-4 text-sm text-slate-500">
+              Выберите период для детального обзора планирования.
+            </div>
+          )}
+        </div>
+      )}
 
       {activeTab === 'Периоды' && (
         <>
@@ -518,23 +619,23 @@ const PlanPage = () => {
                   <label className="text-xs text-slate-500">
                     План подъёма
                     <input
-                      className="input mt-1"
+                      className="input"
                       type="time"
                       value={dayPlan.requirements.sleepWakeTarget ?? ''}
                       onChange={event =>
                         updateData(state => {
                           const plan = state.planner.dayPlans.find(item => item.date === editorDate);
                           if (!plan) return { ...state };
-                          plan.requirements.sleepWakeTarget = event.target.value || undefined;
+                          plan.requirements.sleepWakeTarget = event.target.value;
                           return { ...state };
                         })
                       }
                     />
                   </label>
                   <label className="text-xs text-slate-500">
-                    План длительности сна (мин)
+                    Цель сна (мин)
                     <input
-                      className="input mt-1"
+                      className="input"
                       type="number"
                       value={dayPlan.requirements.sleepDurationTargetMinutes ?? ''}
                       onChange={event =>
@@ -552,246 +653,103 @@ const PlanPage = () => {
               </div>
 
               <div className="space-y-2">
-                <h3 className="text-sm font-semibold">Цели КБЖУ и приемы пищи</h3>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <input
-                    className="input"
-                    type="number"
-                    placeholder="Ккал"
-                    value={nutritionTargets.kcal ?? ''}
-                    onChange={event =>
-                      updateNutritionTarget(
-                        'kcal',
-                        event.target.value ? Number(event.target.value) : undefined
-                      )
-                    }
-                  />
-                  <input
-                    className="input"
-                    type="number"
-                    placeholder="Белки"
-                    value={nutritionTargets.protein ?? ''}
-                    onChange={event =>
-                      updateNutritionTarget(
-                        'protein',
-                        event.target.value ? Number(event.target.value) : undefined
-                      )
-                    }
-                  />
-                  <input
-                    className="input"
-                    type="number"
-                    placeholder="Жиры"
-                    value={nutritionTargets.fat ?? ''}
-                    onChange={event =>
-                      updateNutritionTarget(
-                        'fat',
-                        event.target.value ? Number(event.target.value) : undefined
-                      )
-                    }
-                  />
-                  <input
-                    className="input"
-                    type="number"
-                    placeholder="Углеводы"
-                    value={nutritionTargets.carb ?? ''}
-                    onChange={event =>
-                      updateNutritionTarget(
-                        'carb',
-                        event.target.value ? Number(event.target.value) : undefined
-                      )
-                    }
-                  />
-                  <input
-                    className="input"
-                    type="number"
-                    placeholder="Приемы пищи"
-                    value={nutritionTargets.meals ?? ''}
-                    onChange={event =>
-                      updateNutritionTarget(
-                        'meals',
-                        event.target.value ? Number(event.target.value) : undefined
-                      )
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <h3 className="text-sm font-semibold">Питание</h3>
-                  <button
-                    className="btn-secondary w-full sm:w-auto"
-                    onClick={() =>
-                      setMealSheet({
-                        meal: 'breakfast',
-                        kind: 'dish',
-                        refId: '',
-                        title: '',
-                        grams: 150,
-                        servings: 1,
-                        cheatCategory: 'pizza',
-                        nutritionTags: [],
-                        plannedKcal: '',
-                        plannedProtein: '',
-                        plannedFat: '',
-                        plannedCarb: ''
-                      })
-                    }
-                  >
-                    Добавить блюдо/продукт
-                  </button>
-                </div>
-                {(Object.keys(mealLabels) as FoodEntry['meal'][]).map(meal => (
-                  <div key={meal} className="space-y-2">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-xs uppercase tracking-wide text-slate-400">
-                        {mealLabels[meal]}
-                      </p>
-                      <label className="text-[11px] text-slate-500">
-                        Время
-                        <input
-                          type="time"
-                          className="input input-time mt-1 w-32"
-                          value={mealTimes[meal] || getDefaultMealTime(meal)}
-                          onChange={event => updateMealTime(meal, event.target.value)}
-                        />
-                      </label>
-                    </div>
-                    {dayPlan.mealsPlan[meal].length === 0 ? (
-                      <p className="text-xs text-slate-500">Нет позиций</p>
-                    ) : (
-                      dayPlan.mealsPlan[meal].map(item => (
-                        <div
-                          key={item.id}
-                          className="flex flex-col gap-2 rounded-xl border p-2 sm:flex-row sm:items-center sm:justify-between"
+                <h3 className="text-sm font-semibold">План питания</h3>
+                <div className="space-y-2">
+                  {(Object.keys(mealLabels) as FoodEntry['meal'][]).map(meal => (
+                    <div key={meal} className="rounded-xl border p-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold">{mealLabels[meal]}</p>
+                        <button
+                          className="btn-secondary"
+                          onClick={() =>
+                            setMealSheet({
+                              meal,
+                              kind: 'dish',
+                              refId: '',
+                              title: '',
+                              grams: 120,
+                              servings: 1,
+                              cheatCategory: 'pizza',
+                              nutritionTags: [],
+                              plannedKcal: '',
+                              plannedProtein: '',
+                              plannedFat: '',
+                              plannedCarb: ''
+                            })
+                          }
                         >
-                          <div className="text-sm">
-                            {item.kind === 'dish'
-                              ? data.library.recipes.find(dish => dish.id === item.refId)?.name
-                              : item.kind === 'product'
-                              ? data.library.products.find(product => product.id === item.refId)?.name
-                              : item.title}
-                          </div>
-                          <button
-                            className="btn-secondary w-full text-red-500 sm:w-auto"
-                            onClick={() =>
-                              updateData(state => {
-                                const plan = state.planner.dayPlans.find(
-                                  itemPlan => itemPlan.date === editorDate
-                                );
-                                if (!plan) return { ...state };
-                                plan.mealsPlan[meal] = plan.mealsPlan[meal].filter(
-                                  itemPlan => itemPlan.id !== item.id
-                                );
-                                return { ...state };
-                              })
+                          + Добавить
+                        </button>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                        <label>
+                          Время
+                          <input
+                            type="time"
+                            className="input input-time mt-1 w-24"
+                            value={mealTimes[meal] ?? getDefaultMealTime(meal)}
+                            onChange={event => updateMealTime(meal, event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          Цель ккал
+                          <input
+                            type="number"
+                            className="input input-time mt-1 w-24"
+                            value={nutritionTargets.kcal ?? ''}
+                            onChange={event =>
+                              updateNutritionTarget('kcal', Number(event.target.value) || undefined)
                             }
-                          >
-                            Удалить
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <h3 className="text-sm font-semibold">Активность</h3>
-                  <p className="text-xs text-slate-500">
-                    Планируйте общий коэффициент и ключевые показатели.
-                  </p>
-                </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <input
-                    className="input"
-                    type="number"
-                    step="0.01"
-                    placeholder="Коэффициент активности"
-                    value={dayPlan.activityTargets?.coefficient ?? ''}
-                    onChange={event =>
-                      updateData(state => {
-                        const plan = state.planner.dayPlans.find(item => item.date === editorDate);
-                        if (!plan) return { ...state };
-                        plan.activityTargets ??= {};
-                        plan.activityTargets.coefficient = Number(event.target.value) || undefined;
-                        return { ...state };
-                      })
-                    }
-                  />
-                  <input
-                    className="input"
-                    type="number"
-                    placeholder="Минуты тренировок"
-                    value={dayPlan.activityTargets?.trainingMinutes ?? ''}
-                    onChange={event =>
-                      updateData(state => {
-                        const plan = state.planner.dayPlans.find(item => item.date === editorDate);
-                        if (!plan) return { ...state };
-                        plan.activityTargets ??= {};
-                        plan.activityTargets.trainingMinutes = Number(event.target.value) || undefined;
-                        return { ...state };
-                      })
-                    }
-                  />
-                  <input
-                    className="input"
-                    type="number"
-                    placeholder="Минуты движения"
-                    value={dayPlan.activityTargets?.movementMinutes ?? ''}
-                    onChange={event =>
-                      updateData(state => {
-                        const plan = state.planner.dayPlans.find(item => item.date === editorDate);
-                        if (!plan) return { ...state };
-                        plan.activityTargets ??= {};
-                        plan.activityTargets.movementMinutes = Number(event.target.value) || undefined;
-                        return { ...state };
-                      })
-                    }
-                  />
-                  <input
-                    className="input"
-                    type="number"
-                    placeholder="Шаги по плану"
-                    value={dayPlan.activityTargets?.steps ?? dayPlan.plannedSteps ?? ''}
-                    onChange={event =>
-                      updateData(state => {
-                        const plan = state.planner.dayPlans.find(item => item.date === editorDate);
-                        if (!plan) return { ...state };
-                        const stepsValue = Number(event.target.value) || undefined;
-                        plan.plannedSteps = stepsValue;
-                        plan.activityTargets ??= {};
-                        plan.activityTargets.steps = stepsValue;
-                        return { ...state };
-                      })
-                    }
-                  />
-                  <input
-                    className="input"
-                    type="number"
-                    step="0.1"
-                    placeholder="Дистанция, км"
-                    value={dayPlan.activityTargets?.distanceKm ?? ''}
-                    onChange={event =>
-                      updateData(state => {
-                        const plan = state.planner.dayPlans.find(item => item.date === editorDate);
-                        if (!plan) return { ...state };
-                        plan.activityTargets ??= {};
-                        plan.activityTargets.distanceKm = Number(event.target.value) || undefined;
-                        return { ...state };
-                      })
-                    }
-                  />
+                          />
+                        </label>
+                      </div>
+                      <div className="mt-2 space-y-2">
+                        {dayPlan.mealsPlan[meal].length === 0 ? (
+                          <p className="text-xs text-slate-500">Нет блюд</p>
+                        ) : (
+                          dayPlan.mealsPlan[meal].map(item => (
+                            <div
+                              key={item.id}
+                              className="flex flex-col gap-2 rounded-lg border border-slate-200 p-2 text-sm"
+                            >
+                              <div>
+                                {item.kind === 'dish'
+                                  ? data.library.recipes.find(recipe => recipe.id === item.refId)?.name
+                                  : item.kind === 'product'
+                                  ? data.library.products.find(product => product.id === item.refId)?.name
+                                  : item.title}
+                              </div>
+                              <button
+                                className="btn-secondary w-full text-red-500 sm:w-auto"
+                                onClick={() =>
+                                  updateData(state => {
+                                    const plan = state.planner.dayPlans.find(
+                                      itemPlan => itemPlan.date === editorDate
+                                    );
+                                    if (!plan) return { ...state };
+                                    plan.mealsPlan[meal] = plan.mealsPlan[meal].filter(
+                                      itemPlan => itemPlan.id !== item.id
+                                    );
+                                    return { ...state };
+                                  })
+                                }
+                              >
+                                Удалить
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
               <div className="space-y-2">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <h3 className="text-sm font-semibold">Тренировки</h3>
+                <h3 className="text-sm font-semibold">Тренировки и движение</h3>
+                <div className="flex items-center gap-2">
                   <button
-                    className="btn-secondary w-full sm:w-auto"
+                    className="btn-secondary"
                     onClick={() =>
                       setWorkoutSheet({
                         timeOfDay: 'morning',
@@ -951,11 +909,47 @@ const PlanPage = () => {
         </div>
       )}
 
-      <BottomSheet
-        open={Boolean(mealSheet)}
-        title="Добавить в меню"
-        onClose={() => setMealSheet(null)}
-      >
+      {activeTab === 'Активность' && (
+        <div className="space-y-4">
+          <div className="card p-4 space-y-2">
+            <h2 className="section-title">План активности</h2>
+            {selectedPeriod ? (
+              <p className="text-sm text-slate-500">
+                Период: {selectedPeriod.name} · Дней {dayList.length}
+              </p>
+            ) : (
+              <p className="text-sm text-slate-500">Выберите период, чтобы управлять планом.</p>
+            )}
+          </div>
+
+          {selectedPeriod ? (
+            <div className="space-y-2">
+              {dayList.map(date => {
+                const plan = data.planner.dayPlans.find(item => item.date === date);
+                const workouts = plan?.workoutsPlan ?? [];
+                return (
+                  <div key={date} className="card p-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold">{date}</h3>
+                        <p className="text-xs text-slate-500">
+                          Сессий: {workouts.length} · Обязательных:{' '}
+                          {workouts.filter(item => item.isRequired).length}
+                        </p>
+                      </div>
+                      <button className="btn-secondary" onClick={() => openDayEditor(date)}>
+                        Редактировать
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      <BottomSheet open={Boolean(mealSheet)} title="Добавить в меню" onClose={() => setMealSheet(null)}>
         {mealSheet && (
           <div className="space-y-3">
             <label className="text-sm font-semibold text-slate-600">Приём пищи</label>
@@ -1041,9 +1035,7 @@ const PlanPage = () => {
                 placeholder="Граммы"
                 value={mealSheet.grams}
                 onChange={event =>
-                  setMealSheet(prev =>
-                    prev ? { ...prev, grams: Number(event.target.value) } : prev
-                  )
+                  setMealSheet(prev => prev ? { ...prev, grams: Number(event.target.value) } : prev)
                 }
               />
             ) : null}
@@ -1152,11 +1144,7 @@ const PlanPage = () => {
         )}
       </BottomSheet>
 
-      <BottomSheet
-        open={Boolean(workoutSheet)}
-        title="Добавить сессию"
-        onClose={() => setWorkoutSheet(null)}
-      >
+      <BottomSheet open={Boolean(workoutSheet)} title="Добавить сессию" onClose={() => setWorkoutSheet(null)}>
         {workoutSheet && (
           <div className="space-y-3">
             <label className="text-sm font-semibold text-slate-600">Время суток</label>

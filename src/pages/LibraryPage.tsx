@@ -4,19 +4,25 @@ import { useAppStore } from '../store/useAppStore';
 import { currentTimeString, todayISO } from '../utils/date';
 import { calcRecipeNutrition } from '../utils/nutrition';
 import { savePhotoBlob } from '../storage/photoDb';
-import { Exercise, FoodEntry, NutritionTag, Recipe, TaskTemplate, MovementActivity } from '../types';
+import {
+  Drink,
+  Exercise,
+  FoodEntry,
+  MovementActivity,
+  NutritionTag,
+  Recipe,
+  TaskTemplate
+} from '../types';
 
-const tabs = [
-  'Упражнения',
-  'Протоколы',
-  'Продукты',
-  'Блюда',
-  'Шаблоны',
-  'Правила',
-  'Движение'
-] as const;
+const librarySections = {
+  Питание: ['Продукты', 'Блюда', 'Напитки'],
+  Тренировки: ['Упражнения', 'Протоколы'],
+  Активность: ['Движение', 'Шаблоны', 'Правила']
+} as const;
 
-type LibraryTab = (typeof tabs)[number];
+type LibrarySection = keyof typeof librarySections;
+
+type LibraryTab = (typeof librarySections)[LibrarySection][number];
 
 type FoodSheetItem = {
   kind: 'product' | 'dish';
@@ -38,13 +44,14 @@ const nutritionTagLabels: Record<NutritionTag, string> = {
 
 const LibraryPage = () => {
   const { data, addFoodEntry, createOrGetDayPlan, updateData } = useAppStore();
-  const [active, setActive] = useState<LibraryTab>('Упражнения');
+  const [activeSection, setActiveSection] = useState<LibrarySection>('Питание');
+  const [activeTab, setActiveTab] = useState<LibraryTab>('Продукты');
   const [query, setQuery] = useState('');
   const [detailItem, setDetailItem] = useState<unknown | null>(null);
   const [foodSheet, setFoodSheet] = useState<FoodSheetItem | null>(null);
   const [taskSheet, setTaskSheet] = useState<TaskTemplate | null>(null);
   const [createSheet, setCreateSheet] = useState<
-    'dish' | 'product' | 'exercise' | 'movement'
+    'dish' | 'product' | 'exercise' | 'movement' | 'drink'
     | null
   >(null);
   const [exerciseMedia, setExerciseMedia] = useState({
@@ -74,6 +81,16 @@ const LibraryPage = () => {
     nutritionTags: [] as NutritionTag[],
     hydrationContribution: false
   });
+  const [newDrink, setNewDrink] = useState({
+    name: '',
+    hydrationFactor: 1,
+    kcalPer100ml: 0,
+    proteinPer100ml: 0,
+    fatPer100ml: 0,
+    carbPer100ml: 0,
+    portionLabel: 'Стакан',
+    portionMl: 250
+  });
   const [newExercise, setNewExercise] = useState({
     name: '',
     tags: '',
@@ -100,11 +117,15 @@ const LibraryPage = () => {
     });
   }, [detailItem]);
 
+  useEffect(() => {
+    setActiveTab(librarySections[activeSection][0]);
+  }, [activeSection]);
+
   const filtered = useMemo(() => {
     const normalize = (value: string) => value.toLowerCase();
     const q = normalize(query);
     const match = (value: string) => normalize(value).includes(q);
-    switch (active) {
+    switch (activeTab) {
       case 'Упражнения':
         return data.library.exercises.filter(item => match(item.name));
       case 'Протоколы':
@@ -119,10 +140,12 @@ const LibraryPage = () => {
         return data.library.rules.filter(item => match(item.name));
       case 'Движение':
         return data.library.movementActivities.filter(item => match(item.name));
+      case 'Напитки':
+        return data.library.drinks.filter(item => match(item.name));
       default:
         return [];
     }
-  }, [active, data.library, query]);
+  }, [activeTab, data.library, query]);
 
   const openFoodSheet = (item: FoodSheetItem) => {
     setFoodForm({
@@ -177,42 +200,86 @@ const LibraryPage = () => {
     }));
   };
 
+  const sectionTabs = librarySections[activeSection];
+
   return (
     <section className="space-y-4">
       <header className="space-y-2">
-        <h1 className="text-2xl font-bold">Библиотека</h1>
+        <h1 className="text-2xl font-bold">Библиотеки</h1>
+        <p className="text-sm text-slate-500">
+          Настройка справочников для питания, тренировок и активности.
+        </p>
         <input
           className="input"
           placeholder="Поиск"
           value={query}
           onChange={event => setQuery(event.target.value)}
         />
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <button className="btn-secondary w-full sm:w-auto" onClick={() => setCreateSheet('dish')}>
-            + Новое блюдо
-          </button>
-          <button className="btn-secondary w-full sm:w-auto" onClick={() => setCreateSheet('product')}>
-            + Новый продукт
-          </button>
-          <button className="btn-secondary w-full sm:w-auto" onClick={() => setCreateSheet('exercise')}>
-            + Новое упражнение
-          </button>
-          <button className="btn-secondary w-full sm:w-auto" onClick={() => setCreateSheet('movement')}>
-            + Новое движение
-          </button>
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {(Object.keys(librarySections) as LibrarySection[]).map(section => (
+            <button
+              key={section}
+              className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide ${
+                activeSection === section ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'
+              }`}
+              onClick={() => setActiveSection(section)}
+            >
+              {section}
+            </button>
+          ))}
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {tabs.map(tab => (
+          {sectionTabs.map(tab => (
             <button
               key={tab}
               className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide ${
-                active === tab ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'
+                activeTab === tab ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'
               }`}
-              onClick={() => setActive(tab)}
+              onClick={() => setActiveTab(tab)}
             >
               {tab}
             </button>
           ))}
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {activeSection === 'Питание' ? (
+            <>
+              <button
+                className="btn-secondary w-full sm:w-auto"
+                onClick={() => setCreateSheet('dish')}
+              >
+                + Новое блюдо
+              </button>
+              <button
+                className="btn-secondary w-full sm:w-auto"
+                onClick={() => setCreateSheet('product')}
+              >
+                + Новый продукт
+              </button>
+              <button
+                className="btn-secondary w-full sm:w-auto"
+                onClick={() => setCreateSheet('drink')}
+              >
+                + Новый напиток
+              </button>
+            </>
+          ) : null}
+          {activeSection === 'Тренировки' ? (
+            <button
+              className="btn-secondary w-full sm:w-auto"
+              onClick={() => setCreateSheet('exercise')}
+            >
+              + Новое упражнение
+            </button>
+          ) : null}
+          {activeSection === 'Активность' ? (
+            <button
+              className="btn-secondary w-full sm:w-auto"
+              onClick={() => setCreateSheet('movement')}
+            >
+              + Новое движение
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -228,19 +295,26 @@ const LibraryPage = () => {
                   <p className="text-sm text-slate-500">{(item as any).kcalPer100g} ккал/100г</p>
                 ) : null}
                 {'category' in item ? (
+                  <p className="text-xs text-slate-500">Категория: {(item as Recipe).category}</p>
+                ) : null}
+                {'hydrationFactor' in item ? (
                   <p className="text-xs text-slate-500">
-                    Категория: {(item as Recipe).category}
+                    Гидратация: {(item as Drink).hydrationFactor} · порций{' '}
+                    {(item as Drink).portions.length}
                   </p>
                 ) : null}
-                {active === 'Движение' && 'kind' in item ? (
+                {activeTab === 'Движение' && 'kind' in item ? (
                   <p className="text-xs text-slate-500">Тип: {(item as MovementActivity).kind}</p>
                 ) : null}
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                <button className="btn-secondary w-full sm:w-auto" onClick={() => setDetailItem(item)}>
+                <button
+                  className="btn-secondary w-full sm:w-auto"
+                  onClick={() => setDetailItem(item)}
+                >
                   Подробнее
                 </button>
-                {active === 'Продукты' && 'kcalPer100g' in item ? (
+                {activeTab === 'Продукты' && 'kcalPer100g' in item ? (
                   <button
                     className="btn-primary w-full sm:w-auto"
                     onClick={() => openFoodSheet({ kind: 'product', refId: (item as any).id })}
@@ -248,7 +322,7 @@ const LibraryPage = () => {
                     Добавить в питание
                   </button>
                 ) : null}
-                {active === 'Блюда' ? (
+                {activeTab === 'Блюда' ? (
                   <button
                     className="btn-primary w-full sm:w-auto"
                     onClick={() => openFoodSheet({ kind: 'dish', refId: (item as any).id })}
@@ -256,8 +330,11 @@ const LibraryPage = () => {
                     Добавить в питание
                   </button>
                 ) : null}
-                {active === 'Шаблоны' ? (
-                  <button className="btn-primary w-full sm:w-auto" onClick={() => setTaskSheet(item as TaskTemplate)}>
+                {activeTab === 'Шаблоны' ? (
+                  <button
+                    className="btn-primary w-full sm:w-auto"
+                    onClick={() => setTaskSheet(item as TaskTemplate)}
+                  >
                     Добавить задачу
                   </button>
                 ) : null}
@@ -373,9 +450,7 @@ const LibraryPage = () => {
                     <p className="font-semibold">
                       {step.text} {step.durationSec ? `· ${step.durationSec}s` : ''}
                     </p>
-                    {exercise ? (
-                      <p className="text-xs text-slate-500">{exercise.name}</p>
-                    ) : null}
+                    {exercise ? <p className="text-xs text-slate-500">{exercise.name}</p> : null}
                   </div>
                 );
               })}
@@ -476,7 +551,28 @@ const LibraryPage = () => {
           </div>
         ) : null}
 
-        {detailItem && active === 'Движение' && 'kind' in (detailItem as MovementActivity) ? (
+        {detailItem && 'portions' in (detailItem as Drink) ? (
+          <div className="space-y-2 text-sm text-slate-600">
+            <p>Гидратация: {(detailItem as Drink).hydrationFactor}</p>
+            <p>
+              КБЖУ: {(detailItem as Drink).kcalPer100ml ?? 0} ккал · Б{' '}
+              {(detailItem as Drink).proteinPer100ml ?? 0} · Ж{' '}
+              {(detailItem as Drink).fatPer100ml ?? 0} · У {(detailItem as Drink).carbPer100ml ?? 0}
+            </p>
+            <div>
+              <p className="text-xs font-semibold uppercase text-slate-400">Порции</p>
+              <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                {(detailItem as Drink).portions.map(portion => (
+                  <span key={portion.label} className="badge">
+                    {portion.label} · {portion.ml} мл
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {detailItem && activeTab === 'Движение' && 'kind' in (detailItem as MovementActivity) ? (
           <div className="space-y-2 text-sm text-slate-600">
             <p>Тип активности: {(detailItem as MovementActivity).kind}</p>
           </div>
@@ -581,11 +677,7 @@ const LibraryPage = () => {
         )}
       </BottomSheet>
 
-      <BottomSheet
-        open={Boolean(taskSheet)}
-        title="Добавить задачу"
-        onClose={() => setTaskSheet(null)}
-      >
+      <BottomSheet open={Boolean(taskSheet)} title="Добавить задачу" onClose={() => setTaskSheet(null)}>
         {taskSheet && (
           <>
             <label className="text-sm font-semibold text-slate-600">Дата</label>
@@ -617,6 +709,8 @@ const LibraryPage = () => {
             ? 'Новый продукт'
             : createSheet === 'movement'
             ? 'Новое движение'
+            : createSheet === 'drink'
+            ? 'Новый напиток'
             : 'Новое упражнение'
         }
         onClose={() => setCreateSheet(null)}
@@ -827,6 +921,123 @@ const LibraryPage = () => {
           </div>
         ) : null}
 
+        {createSheet === 'drink' ? (
+          <div className="space-y-3">
+            <input
+              className="input"
+              placeholder="Название"
+              value={newDrink.name}
+              onChange={event => setNewDrink(prev => ({ ...prev, name: event.target.value }))}
+            />
+            <input
+              className="input"
+              type="number"
+              step="0.1"
+              placeholder="Коэф. гидратации"
+              value={newDrink.hydrationFactor}
+              onChange={event =>
+                setNewDrink(prev => ({ ...prev, hydrationFactor: Number(event.target.value) }))
+              }
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                className="input"
+                type="number"
+                placeholder="Ккал на 100 мл"
+                value={newDrink.kcalPer100ml}
+                onChange={event =>
+                  setNewDrink(prev => ({ ...prev, kcalPer100ml: Number(event.target.value) }))
+                }
+              />
+              <input
+                className="input"
+                type="number"
+                placeholder="Белки"
+                value={newDrink.proteinPer100ml}
+                onChange={event =>
+                  setNewDrink(prev => ({ ...prev, proteinPer100ml: Number(event.target.value) }))
+                }
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                className="input"
+                type="number"
+                placeholder="Жиры"
+                value={newDrink.fatPer100ml}
+                onChange={event =>
+                  setNewDrink(prev => ({ ...prev, fatPer100ml: Number(event.target.value) }))
+                }
+              />
+              <input
+                className="input"
+                type="number"
+                placeholder="Углеводы"
+                value={newDrink.carbPer100ml}
+                onChange={event =>
+                  setNewDrink(prev => ({ ...prev, carbPer100ml: Number(event.target.value) }))
+                }
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                className="input"
+                placeholder="Порция"
+                value={newDrink.portionLabel}
+                onChange={event =>
+                  setNewDrink(prev => ({ ...prev, portionLabel: event.target.value }))
+                }
+              />
+              <input
+                className="input"
+                type="number"
+                placeholder="Мл"
+                value={newDrink.portionMl}
+                onChange={event =>
+                  setNewDrink(prev => ({ ...prev, portionMl: Number(event.target.value) }))
+                }
+              />
+            </div>
+            <button
+              className="btn-primary w-full"
+              onClick={() => {
+                if (!newDrink.name) return;
+                updateData(state => {
+                  state.library.drinks.push({
+                    id: crypto.randomUUID(),
+                    name: newDrink.name,
+                    hydrationFactor: newDrink.hydrationFactor || 1,
+                    kcalPer100ml: newDrink.kcalPer100ml || undefined,
+                    proteinPer100ml: newDrink.proteinPer100ml || undefined,
+                    fatPer100ml: newDrink.fatPer100ml || undefined,
+                    carbPer100ml: newDrink.carbPer100ml || undefined,
+                    portions: [
+                      {
+                        label: newDrink.portionLabel || 'Порция',
+                        ml: newDrink.portionMl || 250
+                      }
+                    ]
+                  });
+                  return { ...state };
+                });
+                setNewDrink({
+                  name: '',
+                  hydrationFactor: 1,
+                  kcalPer100ml: 0,
+                  proteinPer100ml: 0,
+                  fatPer100ml: 0,
+                  carbPer100ml: 0,
+                  portionLabel: 'Стакан',
+                  portionMl: 250
+                });
+                setCreateSheet(null);
+              }}
+            >
+              Создать напиток
+            </button>
+          </div>
+        ) : null}
+
         {createSheet === 'exercise' ? (
           <div className="space-y-3">
             <input
@@ -888,7 +1099,7 @@ const LibraryPage = () => {
                       .map(tag => tag.trim())
                       .filter(Boolean),
                     steps: newExercise.steps
-                      .split('\\n')
+                      .split('\n')
                       .map(step => step.trim())
                       .filter(Boolean),
                     cues: [],

@@ -674,6 +674,9 @@ const TrackPage = () => {
     <section className="space-y-4">
       <header className="space-y-2">
         <h1 className="text-2xl font-bold">Трекер</h1>
+        <p className="text-sm text-slate-500">
+          Полный журнал событий — питание, активность и здоровье в одном месте.
+        </p>
         <div className="flex gap-2 overflow-x-auto pb-1">
           {tabs.map(tab => (
             <button
