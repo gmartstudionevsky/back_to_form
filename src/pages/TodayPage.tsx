@@ -66,13 +66,17 @@ const TodayPage = () => {
   const {
     data,
     addFoodEntry,
+    deleteFoodEntry,
     addTrainingLog,
+    deleteTrainingLog,
     addMovementSessionLog,
     updateMovementSessionLog,
     deleteMovementSessionLog,
     setMovementDayLog,
     addSmokingLog,
+    deleteSmokingLog,
     addDrinkLog,
+    deleteDrinkLog,
     addWeightLog,
     addWaistLog,
     addPhotoMeta,
@@ -568,77 +572,201 @@ const TodayPage = () => {
     ? data.library.protocols.find(item => item.id === runnerProtocolId)
     : null;
 
-  const scheduleMeals = dayPlan
-    ? (Object.keys(mealLabels) as FoodEntry['meal'][])
-        .filter(
-          meal => mealComponents[meal].length > 0 || Boolean(mealTimes[meal] || '')
-        )
-        .map(meal => {
-          const plannedTime = getPlannedMealTime(meal, mealTimes[meal]);
-          return {
-            id: meal,
-            meal,
-            title: mealLabels[meal],
-            time: plannedTime,
-            timeOfDay: getMealTimeOfDay(meal, plannedTime),
-            completed: Boolean(foodDay?.entries.some(entry => entry.meal === meal))
-          };
-        })
-    : (foodDay?.entries ?? []).map(entry => ({
-        id: entry.id,
-        meal: entry.meal,
-        title:
-          entry.kind === 'product'
-            ? data.library.products.find(product => product.id === entry.refId)?.name ?? 'Продукт'
-            : entry.kind === 'dish'
-              ? data.library.recipes.find(recipe => recipe.id === entry.refId)?.name ?? 'Блюдо'
-              : entry.title ?? 'Запись',
-        time: entry.time ?? '',
-        timeOfDay: getMealTimeOfDay(entry.meal, entry.time),
-        completed: true
-      }));
+  const formatTimeFromDateTime = (value: string) =>
+    new Date(value).toLocaleTimeString('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
 
-  const scheduleWorkouts = dayPlan
-    ? plannedWorkouts.map(item => {
-        const plannedTime = getPlannedWorkoutTime(item);
-        return {
-          id: item.id,
-          title:
-            item.kind === 'movement' || !item.protocolRef
-              ? data.library.movementActivities.find(
-                  activity => activity.id === item.movementActivityRef
-                )?.name ?? 'Движение'
-              : data.library.protocols.find(protocol => protocol.id === item.protocolRef)?.name ??
-                'Тренировка',
-          time: plannedTime,
-          timeOfDay: item.plannedTime ? getTimeOfDayFromTime(plannedTime) : item.timeOfDay,
-          completed: item.completed
-        };
-      })
-    : [
-        ...trainingLogs.map(log => ({
-          id: log.id,
-          title: 'Тренировка',
-          time: new Date(log.dateTime).toLocaleTimeString('ru-RU', {
-            hour: '2-digit',
-            minute: '2-digit'
-          }),
-          timeOfDay: getTimeOfDayFromDateTime(log.dateTime),
-          completed: true
-        })),
-        ...movementSessions.map(log => ({
-          id: log.id,
-          title:
-            data.library.movementActivities.find(item => item.id === log.activityRef)?.name ??
-            'Движение',
-          time: new Date(log.dateTime).toLocaleTimeString('ru-RU', {
-            hour: '2-digit',
-            minute: '2-digit'
-          }),
-          timeOfDay: getTimeOfDayFromDateTime(log.dateTime),
-          completed: true
-        }))
-      ];
+  const getFoodEntryTitle = (entry: FoodEntry) => {
+    if (entry.kind === 'product') {
+      return data.library.products.find(product => product.id === entry.refId)?.name ?? 'Продукт';
+    }
+    if (entry.kind === 'dish') {
+      return data.library.recipes.find(recipe => recipe.id === entry.refId)?.name ?? 'Блюдо';
+    }
+    return entry.title ?? 'Запись';
+  };
+
+  const plannedMealKeys = dayPlan
+    ? (Object.keys(mealLabels) as FoodEntry['meal'][]).filter(
+        meal => mealComponents[meal].length > 0 || Boolean(mealTimes[meal] || '')
+      )
+    : [];
+
+  const foodEntries = (foodDay?.entries ?? []).slice();
+  const foodEntriesByMeal = (Object.keys(mealLabels) as FoodEntry['meal'][]).reduce(
+    (acc, meal) => {
+      const entries = foodEntries
+        .filter(entry => entry.meal === meal)
+        .sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''));
+      acc[meal] = entries;
+      return acc;
+    },
+    {} as Record<FoodEntry['meal'], FoodEntry[]>
+  );
+
+  const plannedMealItems = plannedMealKeys.map(meal => {
+    const plannedTime = getPlannedMealTime(meal, mealTimes[meal]);
+    const entries = foodEntriesByMeal[meal] ?? [];
+    const primaryEntry = entries[0];
+    return {
+      id: meal,
+      kind: 'meal-plan' as const,
+      meal,
+      title: mealLabels[meal],
+      time: plannedTime,
+      timeOfDay: getMealTimeOfDay(meal, plannedTime),
+      completed: entries.length > 0,
+      actualTime: primaryEntry?.time ?? '',
+      entryId: primaryEntry?.id,
+      entriesCount: entries.length
+    };
+  });
+
+  const extraMealEntries = (Object.keys(mealLabels) as FoodEntry['meal'][]).flatMap(meal => {
+    const entries = foodEntriesByMeal[meal] ?? [];
+    const extraEntries = plannedMealKeys.includes(meal) ? entries.slice(1) : entries;
+    return extraEntries.map(entry => ({
+      id: entry.id,
+      kind: 'meal-entry' as const,
+      meal,
+      title: getFoodEntryTitle(entry),
+      time: entry.time ?? getPlannedMealTime(meal),
+      timeOfDay: getMealTimeOfDay(meal, entry.time),
+      entry
+    }));
+  });
+
+  const trainingLogsWithTime = trainingLogs
+    .map(log => ({
+      ...log,
+      time: formatTimeFromDateTime(log.dateTime),
+      timeOfDay: log.timeOfDay ?? getTimeOfDayFromDateTime(log.dateTime)
+    }))
+    .sort((a, b) => a.time.localeCompare(b.time));
+
+  const movementLogsWithTime = movementSessions
+    .map(log => ({
+      ...log,
+      time: formatTimeFromDateTime(log.dateTime),
+      timeOfDay: log.timeOfDay ?? getTimeOfDayFromDateTime(log.dateTime)
+    }))
+    .sort((a, b) => a.time.localeCompare(b.time));
+
+  const remainingTrainingLogs = [...trainingLogsWithTime];
+  const remainingMovementLogs = [...movementLogsWithTime];
+
+  const takeTrainingLog = (timeOfDay: WorkoutPlanItem['timeOfDay']) => {
+    const index = remainingTrainingLogs.findIndex(log => log.timeOfDay === timeOfDay);
+    if (index === -1) return null;
+    return remainingTrainingLogs.splice(index, 1)[0];
+  };
+
+  const takeMovementLog = (
+    timeOfDay: WorkoutPlanItem['timeOfDay'],
+    activityRef?: string
+  ) => {
+    const index = remainingMovementLogs.findIndex(
+      log =>
+        log.timeOfDay === timeOfDay &&
+        (!activityRef || !log.activityRef || log.activityRef === activityRef)
+    );
+    if (index === -1) return null;
+    return remainingMovementLogs.splice(index, 1)[0];
+  };
+
+  const getProtocolPlannedMinutes = (protocolId?: string) => {
+    if (!protocolId) return undefined;
+    const protocol = data.library.protocols.find(item => item.id === protocolId);
+    if (!protocol) return undefined;
+    const totalDurationSec = protocol.steps.reduce(
+      (sum, step) => sum + (step.durationSec ?? 0),
+      0
+    );
+    return totalDurationSec ? Math.max(1, Math.round(totalDurationSec / 60)) : undefined;
+  };
+
+  const plannedWorkoutItems = plannedWorkouts.map(item => {
+    const plannedTime = getPlannedWorkoutTime(item);
+    const timeOfDay = item.plannedTime ? getTimeOfDayFromTime(plannedTime) : item.timeOfDay;
+    const isMovement = item.kind === 'movement' || !item.protocolRef;
+    const matchedLog = isMovement
+      ? takeMovementLog(timeOfDay, item.movementActivityRef)
+      : takeTrainingLog(timeOfDay);
+    const plannedMinutes = isMovement
+      ? item.plannedMinutes
+      : getProtocolPlannedMinutes(item.protocolRef);
+    const actualMinutes = isMovement ? matchedLog?.durationMinutes : matchedLog?.minutes;
+    const completionPercent = plannedMinutes
+      ? Math.min(150, Math.round(((actualMinutes ?? 0) / plannedMinutes) * 100))
+      : undefined;
+    return {
+      id: item.id,
+      kind: 'workout-plan' as const,
+      title:
+        isMovement
+          ? data.library.movementActivities.find(
+              activity => activity.id === item.movementActivityRef
+            )?.name ?? 'Движение'
+          : data.library.protocols.find(protocol => protocol.id === item.protocolRef)?.name ??
+            'Тренировка',
+      time: plannedTime,
+      timeOfDay,
+      completed: Boolean(item.completed || actualMinutes),
+      plannedMinutes,
+      actualMinutes,
+      actualTime: matchedLog?.time ?? '',
+      completionPercent,
+      isMovement,
+      logId: matchedLog?.id
+    };
+  });
+
+  const extraTrainingItems = remainingTrainingLogs.map(log => ({
+    id: log.id,
+    kind: 'training-log' as const,
+    title: 'Тренировка',
+    time: log.time,
+    timeOfDay: log.timeOfDay,
+    minutes: log.minutes
+  }));
+
+  const extraMovementItems = remainingMovementLogs.map(log => {
+    const activityName =
+      data.library.movementActivities.find(item => item.id === log.activityRef)?.name ??
+      'Движение';
+    return {
+      id: log.id,
+      kind: 'movement-log' as const,
+      title: activityName,
+      time: log.time,
+      timeOfDay: log.timeOfDay,
+      minutes: log.durationMinutes,
+      flights: log.actualFlights ?? log.plannedFlights
+    };
+  });
+
+  const smokingItems = data.logs.smoking
+    .filter(log => log.dateTime.slice(0, 10) === selectedDate)
+    .map(log => ({
+      id: log.id,
+      kind: 'smoking-log' as const,
+      title: 'Сигареты',
+      time: formatTimeFromDateTime(log.dateTime),
+      timeOfDay: getTimeOfDayFromDateTime(log.dateTime),
+      count: log.count
+    }));
+
+  const drinkItems = drinkLogs.map(log => ({
+    id: log.id,
+    kind: 'drink-log' as const,
+    title: data.library.drinks.find(item => item.id === log.drinkId)?.name ?? 'Напиток',
+    time: formatTimeFromDateTime(log.dateTime),
+    timeOfDay: getTimeOfDayFromDateTime(log.dateTime),
+    portionMl: log.portionMl,
+    portionsCount: log.portionsCount
+  }));
 
   const editingMeal = mealEdit ?? 'breakfast';
   const editComponents = mealEdit ? mealComponents[mealEdit] : [];
@@ -647,11 +775,18 @@ const TodayPage = () => {
     ? getPlannedWorkoutTime(plannedMovementSession)
     : '';
   const scheduleItems = [
-    ...scheduleMeals.map(item => ({ ...item, kind: 'meal' as const })),
-    ...scheduleWorkouts.map(item => ({ ...item, kind: 'workout' as const }))
+    ...plannedMealItems,
+    ...plannedWorkoutItems,
+    ...extraMealEntries,
+    ...extraTrainingItems,
+    ...extraMovementItems,
+    ...smokingItems,
+    ...drinkItems
   ];
-  const plannedItemsCount = scheduleItems.length;
-  const completedItemsCount = scheduleItems.filter(item => item.completed).length;
+  const plannedItemsCount = plannedMealItems.length + plannedWorkoutItems.length;
+  const completedItemsCount =
+    plannedMealItems.filter(item => item.completed).length +
+    plannedWorkoutItems.filter(item => item.completed).length;
   const progressPercent = plannedItemsCount
     ? Math.round((completedItemsCount / plannedItemsCount) * 100)
     : 0;
@@ -760,29 +895,9 @@ const TodayPage = () => {
       <div className="card p-4 space-y-3" id="schedule">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="section-title">План дня</h2>
-          <div className="control-row">
-            <button
-              className="btn-secondary"
-              onClick={() => {
-                setFoodForm(prev => ({ ...prev, time: currentTimeString() }));
-                setSheet('food');
-              }}
-            >
-              Добавить питание
-            </button>
-            <button
-              className="btn-secondary"
-              onClick={() => {
-                setTrainingForm(prev => ({ ...prev, time: currentTimeString() }));
-                setSheet('training');
-              }}
-            >
-              Добавить тренировку
-            </button>
-            <button className="btn-secondary" onClick={() => openMovement()}>
-              Добавить движение
-            </button>
-          </div>
+          <p className="text-xs text-slate-500">
+            Автоматический хаб по текущему дню с планом, фактами и прогрессом.
+          </p>
         </div>
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-500">
@@ -798,6 +913,47 @@ const TodayPage = () => {
             />
           </div>
         </div>
+        <div className="grid gap-2 text-xs text-slate-500 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="rounded-xl bg-slate-50 p-3">
+            <p className="uppercase text-[10px]">Питание</p>
+            <p className="text-sm font-semibold text-slate-700">
+              {plannedMealItems.filter(item => item.completed).length}/{plannedMealItems.length || 0}
+            </p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-3">
+            <p className="uppercase text-[10px]">Тренировки</p>
+            <p className="text-sm font-semibold text-slate-700">
+              {
+                plannedWorkoutItems.filter(item => !item.isMovement && item.completed).length
+              }
+              /{plannedWorkoutItems.filter(item => !item.isMovement).length || 0}
+            </p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-3">
+            <p className="uppercase text-[10px]">Движение</p>
+            <p className="text-sm font-semibold text-slate-700">
+              {
+                plannedWorkoutItems.filter(item => item.isMovement && item.completed).length
+              }
+              /{plannedWorkoutItems.filter(item => item.isMovement).length || 0}
+            </p>
+            <p className="text-[11px] text-slate-400">
+              {dayPlan?.plannedSteps ? `Шаги: ${movementDaySteps ?? 0}/${dayPlan.plannedSteps}` : ''}
+            </p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-3">
+            <p className="uppercase text-[10px]">Сигареты</p>
+            <p className="text-sm font-semibold text-slate-700">
+              {cigaretteCount}/{requirements?.smokingTargetMax ?? '—'}
+            </p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-3">
+            <p className="uppercase text-[10px]">Вода</p>
+            <p className="text-sm font-semibold text-slate-700">
+              {hydrationEquivalent.toFixed(0)} мл
+            </p>
+          </div>
+        </div>
         <div className="space-y-4">
           {(Object.keys(timeOfDayLabels) as WorkoutPlanItem['timeOfDay'][]).map(timeOfDay => {
             const items = scheduleItems
@@ -811,10 +967,8 @@ const TodayPage = () => {
                 </p>
                 <div className="space-y-2">
                   {items.map(item => {
-                    if (item.kind === 'workout') {
+                    if (item.kind === 'workout-plan') {
                       const session = plannedWorkouts.find(workout => workout.id === item.id);
-                      const isMovement =
-                        session?.kind === 'movement' || !session?.protocolRef || !session;
                       return (
                         <div
                           key={item.id}
@@ -824,7 +978,12 @@ const TodayPage = () => {
                             <div>
                               <p className="font-semibold">{item.title}</p>
                               <p className="text-xs text-slate-500">
-                                Активность · {item.time}
+                                План · {item.time}
+                                {item.actualTime
+                                  ? ` · Факт: ${item.actualTime}`
+                                  : item.completed
+                                    ? ' · Факт отмечен'
+                                    : ''}
                               </p>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
@@ -833,13 +992,25 @@ const TodayPage = () => {
                                 <button
                                   className="btn-secondary"
                                   onClick={() =>
-                                    scrollToSection(isMovement ? 'movement-plan' : 'training-plan')
+                                    scrollToSection(
+                                      item.isMovement ? 'movement-plan' : 'training-plan'
+                                    )
                                   }
                                 >
                                   К плану
                                 </button>
                               ) : null}
                             </div>
+                          </div>
+                          <div className="rounded-xl bg-slate-50 p-2 text-xs text-slate-500">
+                            <p>
+                              Минуты:{' '}
+                              {item.actualMinutes ? `${item.actualMinutes} мин` : '—'} из{' '}
+                              {item.plannedMinutes ? `${item.plannedMinutes} мин` : '—'}
+                              {item.completionPercent !== undefined
+                                ? ` · ${item.completionPercent}%`
+                                : ''}
+                            </p>
                           </div>
                           {dayPlan ? (
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -854,7 +1025,7 @@ const TodayPage = () => {
                               </label>
                               <div className="control-row">
                                 {!item.completed ? (
-                                  isMovement ? (
+                                  item.isMovement ? (
                                     <button
                                       className="btn-secondary w-full sm:w-auto"
                                       onClick={() => {
@@ -900,67 +1071,239 @@ const TodayPage = () => {
                                       Запустить
                                     </button>
                                   )
-                                ) : null}
+                                ) : (
+                                  <button
+                                    className="btn-secondary w-full sm:w-auto"
+                                    onClick={() => {
+                                      if (item.logId) {
+                                        if (item.isMovement) {
+                                          deleteMovementSessionLog(item.logId);
+                                        } else {
+                                          deleteTrainingLog(item.logId);
+                                        }
+                                      }
+                                      updateData(state => {
+                                        const plan = state.planner.dayPlans.find(
+                                          planItem => planItem.date === selectedDate
+                                        );
+                                        if (!plan) return { ...state };
+                                        plan.workoutsPlan = plan.workoutsPlan.map(planItem =>
+                                          planItem.id === item.id
+                                            ? {
+                                                ...planItem,
+                                                completed: false,
+                                                completedMinutes: undefined
+                                              }
+                                            : planItem
+                                        );
+                                        return { ...state };
+                                      });
+                                    }}
+                                  >
+                                    Отменить отметку
+                                  </button>
+                                )}
                               </div>
                             </div>
                           ) : null}
                         </div>
                       );
                     }
-                    return (
-                      <div
-                        key={item.id}
-                        className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-3 text-sm"
-                      >
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <p className="font-semibold">{item.title}</p>
-                            <p className="text-xs text-slate-500">
-                              {mealLabels[item.meal]} · {item.time}
-                            </p>
+                    if (item.kind === 'meal-plan') {
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-3 text-sm"
+                        >
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <p className="font-semibold">{item.title}</p>
+                              <p className="text-xs text-slate-500">
+                                План · {item.time}
+                                {item.actualTime
+                                  ? ` · Факт: ${item.actualTime}`
+                                  : item.completed
+                                    ? ' · Факт отмечен'
+                                    : ''}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {item.completed ? <span className="badge">Учтено</span> : null}
+                              {dayPlan ? (
+                                <button
+                                  className="btn-secondary"
+                                  onClick={() => scrollToSection('meal-plan')}
+                                >
+                                  К питанию
+                                </button>
+                              ) : null}
+                            </div>
                           </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {item.completed ? <span className="badge">Учтено</span> : null}
-                            {dayPlan ? (
-                              <button
-                                className="btn-secondary"
-                                onClick={() => scrollToSection('meal-plan')}
-                              >
-                                К питанию
-                              </button>
-                            ) : null}
+                          <div className="rounded-xl bg-slate-50 p-2 text-xs text-slate-500">
+                            <p>Записей: {item.entriesCount}</p>
+                          </div>
+                          {dayPlan ? (
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                              <label className="text-xs text-slate-500">
+                                Время
+                                <input
+                                  type="time"
+                                  className="input input-time mt-1 w-32"
+                                  value={item.time}
+                                  onChange={event => updateMealTime(item.meal, event.target.value)}
+                                />
+                              </label>
+                              {!item.completed ? (
+                                <button
+                                  className="btn-secondary w-full sm:w-auto"
+                                  onClick={() => {
+                                    setFoodForm(prev => ({
+                                      ...prev,
+                                      meal: item.meal,
+                                      time: currentTimeString()
+                                    }));
+                                    setSheet('food');
+                                  }}
+                                >
+                                  Отметить прием
+                                </button>
+                              ) : item.entryId ? (
+                                <button
+                                  className="btn-secondary w-full sm:w-auto"
+                                  onClick={() => deleteFoodEntry(selectedDate, item.entryId ?? '')}
+                                >
+                                  Отменить отметку
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    }
+                    if (item.kind === 'meal-entry') {
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-3 text-sm"
+                        >
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <p className="font-semibold">{item.title}</p>
+                              <p className="text-xs text-slate-500">
+                                {mealLabels[item.meal]} · {item.time}
+                              </p>
+                            </div>
+                            <span className="badge">Дополнительно</span>
+                          </div>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <button
+                              className="btn-secondary w-full sm:w-auto"
+                              onClick={() => deleteFoodEntry(selectedDate, item.id)}
+                            >
+                              Отменить запись
+                            </button>
                           </div>
                         </div>
-                        {dayPlan ? (
+                      );
+                    }
+                    if (item.kind === 'training-log') {
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-3 text-sm"
+                        >
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                            <label className="text-xs text-slate-500">
-                              Время
-                              <input
-                                type="time"
-                                className="input input-time mt-1 w-32"
-                                value={item.time}
-                                onChange={event => updateMealTime(item.meal, event.target.value)}
-                              />
-                            </label>
-                            {!item.completed ? (
-                              <button
-                                className="btn-secondary w-full sm:w-auto"
-                                onClick={() => {
-                                  setFoodForm(prev => ({
-                                    ...prev,
-                                    meal: item.meal,
-                                    time: currentTimeString()
-                                  }));
-                                  setSheet('food');
-                                }}
-                              >
-                                Отметить прием
-                              </button>
-                            ) : null}
+                            <div>
+                              <p className="font-semibold">{item.title}</p>
+                              <p className="text-xs text-slate-500">
+                                Факт · {item.time} · {item.minutes} мин
+                              </p>
+                            </div>
+                            <span className="badge">Дополнительно</span>
                           </div>
-                        ) : null}
-                      </div>
-                    );
+                          <button
+                            className="btn-secondary w-full sm:w-auto"
+                            onClick={() => deleteTrainingLog(item.id)}
+                          >
+                            Отменить запись
+                          </button>
+                        </div>
+                      );
+                    }
+                    if (item.kind === 'movement-log') {
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-3 text-sm"
+                        >
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <p className="font-semibold">{item.title}</p>
+                              <p className="text-xs text-slate-500">
+                                Факт · {item.time} · {item.minutes} мин
+                                {item.flights ? ` · Пролеты: ${item.flights}` : ''}
+                              </p>
+                            </div>
+                            <span className="badge">Дополнительно</span>
+                          </div>
+                          <button
+                            className="btn-secondary w-full sm:w-auto"
+                            onClick={() => deleteMovementSessionLog(item.id)}
+                          >
+                            Отменить запись
+                          </button>
+                        </div>
+                      );
+                    }
+                    if (item.kind === 'smoking-log') {
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-3 text-sm"
+                        >
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <p className="font-semibold">Сигареты</p>
+                              <p className="text-xs text-slate-500">
+                                Факт · {item.time} · {item.count} шт
+                              </p>
+                            </div>
+                            <span className="badge">Запись</span>
+                          </div>
+                          <button
+                            className="btn-secondary w-full sm:w-auto"
+                            onClick={() => deleteSmokingLog(item.id)}
+                          >
+                            Отменить запись
+                          </button>
+                        </div>
+                      );
+                    }
+                    if (item.kind === 'drink-log') {
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-3 text-sm"
+                        >
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <p className="font-semibold">{item.title}</p>
+                              <p className="text-xs text-slate-500">
+                                Факт · {item.time} · {item.portionMl * item.portionsCount} мл
+                              </p>
+                            </div>
+                            <span className="badge">Запись</span>
+                          </div>
+                          <button
+                            className="btn-secondary w-full sm:w-auto"
+                            onClick={() => deleteDrinkLog(item.id)}
+                          >
+                            Отменить запись
+                          </button>
+                        </div>
+                      );
+                    }
+                    return null;
                   })}
                 </div>
               </div>
@@ -968,7 +1311,7 @@ const TodayPage = () => {
           })}
           {!scheduleItems.length ? (
             <p className="text-sm text-slate-500">
-              Пока нет расписания. Добавьте питание, тренировки и движение или создайте план.
+              Пока нет данных за день. Создайте план или добавьте записи в разделах ниже.
             </p>
           ) : null}
         </div>
