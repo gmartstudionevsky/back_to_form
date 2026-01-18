@@ -33,14 +33,13 @@ export const calcStepsCoefficient = (steps: number, defaults: ActivityDefaults) 
 export const calcTrainingLogCoefficient = (log: ActivityLog, defaults: ActivityDefaults) =>
   log.minutes * defaults.workoutPerMinute +
   (log.sets ?? 0) * defaults.set +
-  (log.reps ?? 0) * defaults.rep +
-  (log.calories ?? 0) * defaults.kcal;
+  (log.reps ?? 0) * defaults.rep;
 
 export const calcMovementSessionCoefficient = (
   log: MovementSessionLog,
   activity: MovementActivity | undefined,
   defaults: ActivityDefaults,
-  options: { includeSteps?: boolean } = {}
+  options: { includeSteps?: boolean; includeCalories?: boolean } = {}
 ) => {
   const metrics = activity?.activityMetrics ?? {};
   const perMinute = metrics.perMinute ?? defaults.movementPerMinute;
@@ -51,7 +50,7 @@ export const calcMovementSessionCoefficient = (
   const distance = log.distanceKm ?? 0;
   const flights = log.actualFlights ?? log.plannedFlights ?? 0;
   const steps = options.includeSteps ? log.steps ?? 0 : 0;
-  const calories = log.calories ?? 0;
+  const calories = options.includeCalories ? log.calories ?? 0 : 0;
   return (
     log.durationMinutes * perMinute +
     distance * perKm +
@@ -63,7 +62,7 @@ export const calcMovementSessionCoefficient = (
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
-type MovementCaloriesContext = {
+export type ActivityCaloriesContext = {
   weightKg?: number;
   intakeKcal?: number;
   activityCoefficient?: number;
@@ -72,21 +71,12 @@ type MovementCaloriesContext = {
   bodyWaterPercent?: number;
 };
 
-export const estimateMovementCalories = (
-  log: MovementSessionLog,
-  activity: MovementActivity | undefined,
-  defaults: ActivityDefaults,
-  context: MovementCaloriesContext = {}
+const calcAdjustedCalories = (
+  coefficient: number,
+  perKcal: number,
+  context: ActivityCaloriesContext = {}
 ) => {
-  if (!log.durationMinutes || log.durationMinutes <= 0) return 0;
-  const perKcal = activity?.activityMetrics?.perKcal ?? defaults.kcal;
-  if (!perKcal) return 0;
-  const coefficient = calcMovementSessionCoefficient(
-    { ...log, calories: 0 },
-    activity,
-    defaults,
-    { includeSteps: true }
-  );
+  if (!perKcal || coefficient <= 0) return 0;
   const baseCalories = coefficient / perKcal;
   const weightFactor = context.weightKg
     ? clamp(context.weightKg / 70, 0.7, 1.3)
@@ -121,6 +111,31 @@ export const estimateMovementCalories = (
         bodyWaterFactor
     )
   );
+};
+
+export const calcTrainingActivityMetrics = (
+  log: ActivityLog,
+  defaults: ActivityDefaults,
+  context: ActivityCaloriesContext = {}
+) => {
+  const coefficient = calcTrainingLogCoefficient(log, defaults);
+  const calories = calcAdjustedCalories(coefficient, defaults.kcal, context);
+  return { coefficient, calories };
+};
+
+export const calcMovementActivityMetrics = (
+  log: MovementSessionLog,
+  activity: MovementActivity | undefined,
+  defaults: ActivityDefaults,
+  context: ActivityCaloriesContext = {},
+  options: { includeSteps?: boolean } = {}
+) => {
+  const coefficient = calcMovementSessionCoefficient(log, activity, defaults, {
+    includeSteps: options.includeSteps
+  });
+  const perKcal = activity?.activityMetrics?.perKcal ?? defaults.kcal;
+  const calories = calcAdjustedCalories(coefficient, perKcal, context);
+  return { coefficient, calories };
 };
 
 export const calcProtocolDurationMinutes = (protocol?: Protocol) => {

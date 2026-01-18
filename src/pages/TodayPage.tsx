@@ -6,15 +6,15 @@ import { useAppStore } from '../store/useAppStore';
 import { combineDateTime, currentTimeString, formatDate, todayISO } from '../utils/date';
 import { calcFoodEntry, calcMealPlanItem, calcRecipeNutrition } from '../utils/nutrition';
 import {
-  calcMovementSessionCoefficient,
+  calcMovementActivityMetrics,
   calcPlannedWorkoutCoefficient,
   calcProtocolDurationMinutes,
   calcStepsCoefficient,
-  calcTrainingLogCoefficient,
-  estimateMovementCalories,
+  calcTrainingActivityMetrics,
   resolveActivityDefaults
 } from '../utils/activity';
 import {
+  ActivityLog,
   FoodEntry,
   GeoPoint,
   MealComponent,
@@ -139,7 +139,6 @@ const TodayPage = () => {
     minutes: 45,
     sets: 0,
     reps: 0,
-    calories: 0,
     time: currentTimeString()
   });
   const [movementDraft, setMovementDraft] = useState<MovementSessionLog | null>(null);
@@ -312,12 +311,18 @@ const TodayPage = () => {
   );
   const trainingMinutes = trainingLogs.reduce((sum, log) => sum + log.minutes, 0);
   const activityCoefficient = [
-    trainingLogs.reduce((sum, log) => sum + calcTrainingLogCoefficient(log, activityDefaults), 0),
+    trainingLogs.reduce(
+      (sum, log) => sum + calcTrainingActivityMetrics(log, activityDefaults).coefficient,
+      0
+    ),
     movementSessions.reduce((sum, log) => {
       const activity = data.library.movementActivities.find(item => item.id === log.activityRef);
-      return sum + calcMovementSessionCoefficient(log, activity, activityDefaults, {
-        includeSteps: !movementDaySteps
-      });
+      return (
+        sum +
+        calcMovementActivityMetrics(log, activity, activityDefaults, {}, {
+          includeSteps: !movementDaySteps
+        }).coefficient
+      );
     }, 0),
     calcStepsCoefficient(movementDaySteps ?? 0, activityDefaults)
   ].reduce((sum, value) => sum + value, 0);
@@ -382,14 +387,6 @@ const TodayPage = () => {
       .sort((a, b) => a.dateTime.localeCompare(b.dateTime))
       .slice(-1)[0]?.weightKg;
 
-  const estimateMovement = (log: MovementSessionLog) => {
-    const activity = data.library.movementActivities.find(item => item.id === log.activityRef);
-    return estimateMovementCalories(log, activity, activityDefaults, {
-      weightKg: resolveWeightForDateTime(log.dateTime),
-      intakeKcal: totals.kcal,
-      activityCoefficient
-    });
-  };
 
   const resolveFoodTags = (draft: typeof foodForm) => {
     const tags = draft.nutritionTags.length ? [...draft.nutritionTags] : [];
@@ -434,6 +431,23 @@ const TodayPage = () => {
   };
 
   const toDateTime = (date: string, time?: string) => combineDateTime(date, time);
+
+  const activityContext = {
+    weightKg: resolveWeightForDateTime(toDateTime(selectedDate)),
+    intakeKcal: totals.kcal,
+    activityCoefficient
+  };
+
+  const estimateTraining = (log: { minutes: number; sets?: number; reps?: number }) =>
+    calcTrainingActivityMetrics(log as ActivityLog, activityDefaults, activityContext).calories;
+
+  const estimateMovement = (log: MovementSessionLog) => {
+    const activity = data.library.movementActivities.find(item => item.id === log.activityRef);
+    return calcMovementActivityMetrics(log, activity, activityDefaults, {
+      ...activityContext,
+      weightKg: resolveWeightForDateTime(log.dateTime)
+    }).calories;
+  };
 
   const getPlannedMealTime = (meal: FoodEntry['meal'], time?: string) =>
     time?.trim() ? time : getDefaultMealTime(meal);
@@ -2558,15 +2572,9 @@ const TodayPage = () => {
             setTrainingForm(prev => ({ ...prev, reps: Number(event.target.value) }))
           }
         />
-        <label className="text-sm font-semibold text-slate-600">Калории</label>
-        <input
-          type="number"
-          className="input"
-          value={trainingForm.calories}
-          onChange={event =>
-            setTrainingForm(prev => ({ ...prev, calories: Number(event.target.value) }))
-          }
-        />
+        <label className="text-sm font-semibold text-slate-600">
+          Калории (расчёт): {estimateTraining(trainingForm).toFixed(0)} ккал
+        </label>
         <label className="text-sm font-semibold text-slate-600">Время</label>
         <input
           type="time"
@@ -2584,7 +2592,7 @@ const TodayPage = () => {
               minutes: trainingForm.minutes,
               sets: trainingForm.sets || undefined,
               reps: trainingForm.reps || undefined,
-              calories: trainingForm.calories || undefined,
+              calories: estimateTraining(trainingForm) || undefined,
               timeOfDay: getTimeOfDayFromTime(trainingForm.time)
             });
             setSheet(null);
