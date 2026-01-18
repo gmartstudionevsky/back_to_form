@@ -317,7 +317,13 @@ const PlanPage = () => {
             mealsPlan: { breakfast: [], lunch: [], dinner: [], snack: [] },
             workoutsPlan: [],
             nutritionTargets: sourcePlan.nutritionTargets ?? {},
-            requirements: { requireWeight: false, requireWaist: false, requirePhotos: [] }
+            requirements: {
+              requireWeight: false,
+              requireWaist: false,
+              requirePhotos: [],
+              sleepWakeTarget: '07:30',
+              sleepDurationTargetMinutes: 450
+            }
           };
           state.planner.dayPlans.push(plan);
         }
@@ -507,6 +513,41 @@ const PlanPage = () => {
                       })
                     }
                   />
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <label className="text-xs text-slate-500">
+                    План подъёма
+                    <input
+                      className="input mt-1"
+                      type="time"
+                      value={dayPlan.requirements.sleepWakeTarget ?? ''}
+                      onChange={event =>
+                        updateData(state => {
+                          const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+                          if (!plan) return { ...state };
+                          plan.requirements.sleepWakeTarget = event.target.value || undefined;
+                          return { ...state };
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="text-xs text-slate-500">
+                    План длительности сна (мин)
+                    <input
+                      className="input mt-1"
+                      type="number"
+                      value={dayPlan.requirements.sleepDurationTargetMinutes ?? ''}
+                      onChange={event =>
+                        updateData(state => {
+                          const plan = state.planner.dayPlans.find(item => item.date === editorDate);
+                          if (!plan) return { ...state };
+                          plan.requirements.sleepDurationTargetMinutes =
+                            Number(event.target.value) || undefined;
+                          return { ...state };
+                        })
+                      }
+                    />
+                  </label>
                 </div>
               </div>
 

@@ -274,7 +274,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         plannedSteps: undefined,
         activityTargets: {},
         nutritionTargets: { meals: 3 },
-        requirements: { requireWeight: false, requireWaist: false, requirePhotos: [] }
+        requirements: {
+          requireWeight: false,
+          requireWaist: false,
+          requirePhotos: [],
+          sleepWakeTarget: '07:30',
+          sleepDurationTargetMinutes: 450
+        }
       };
       get().updateData(data => {
         data.planner.dayPlans.push(plan as DayPlan);
@@ -291,7 +297,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         existing.plannedSteps ??= undefined;
         existing.activityTargets ??= {};
         existing.nutritionTargets ??= { meals: 3 };
-        existing.requirements ??= { requireWeight: false, requireWaist: false, requirePhotos: [] };
+        existing.requirements ??= {
+          requireWeight: false,
+          requireWaist: false,
+          requirePhotos: [],
+          sleepWakeTarget: '07:30',
+          sleepDurationTargetMinutes: 450
+        };
         existing.tasks ??= [];
         return { ...data };
       });

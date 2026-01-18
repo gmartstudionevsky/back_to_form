@@ -12,6 +12,7 @@ import {
 } from '../utils/activity';
 import {
   ActivityLog,
+  DrinkLog,
   FoodEntry,
   NutritionTag,
   SleepLog,
@@ -21,7 +22,7 @@ import {
   MovementSessionLog
 } from '../types';
 
-const tabs = ['Питание', 'Тренировки', 'Движение', 'Курение', 'Измерения', 'Сон'] as const;
+const tabs = ['Питание', 'Активность', 'Здоровье'] as const;
 
 type Tab = (typeof tabs)[number];
 
@@ -62,6 +63,9 @@ const TrackPage = () => {
     addSmokingLog,
     updateSmokingLog,
     deleteSmokingLog,
+    addDrinkLog,
+    updateDrinkLog,
+    deleteDrinkLog,
     addWeightLog,
     updateWeightLog,
     deleteWeightLog,
@@ -82,11 +86,52 @@ const TrackPage = () => {
   const [weightDraft, setWeightDraft] = useState<WeightLog | null>(null);
   const [waistDraft, setWaistDraft] = useState<WaistLog | null>(null);
   const [sleepDraft, setSleepDraft] = useState<SleepLog | null>(null);
+  const [drinkDraft, setDrinkDraft] = useState<DrinkLog | null>(null);
   const [movementSteps, setMovementSteps] = useState(0);
+  const defaultDrink = useMemo(
+    () => data.library.drinks.find(item => item.id === 'drink-water') ?? data.library.drinks[0],
+    [data.library.drinks]
+  );
+  const [drinkForm, setDrinkForm] = useState(() => ({
+    drinkId: defaultDrink?.id ?? '',
+    portionLabel: defaultDrink?.portions[0]?.label ?? '',
+    portionMl: defaultDrink?.portions[0]?.ml ?? 0,
+    portionsCount: 1,
+    time: currentTimeString()
+  }));
 
   const dayPlan = data.planner.dayPlans.find(plan => plan.date === selectedDate);
   const foodDay = data.logs.foodDays.find(day => day.date === selectedDate);
   const drinkLogs = data.logs.drinks.filter(log => log.dateTime.slice(0, 10) === selectedDate);
+  const drinkTotalMl = drinkLogs.reduce(
+    (sum, log) => sum + log.portionMl * log.portionsCount,
+    0
+  );
+  const drinkHydrationMl = drinkLogs.reduce((sum, log) => {
+    const drink = data.library.drinks.find(item => item.id === log.drinkId);
+    const factor = drink?.hydrationFactor ?? 1;
+    return sum + log.portionMl * log.portionsCount * factor;
+  }, 0);
+  const foodHydrationMl = (foodDay?.entries ?? []).reduce((sum, entry) => {
+    if (entry.kind === 'product' && entry.refId && entry.grams) {
+      const product = data.library.products.find(item => item.id === entry.refId);
+      if (!product?.hydrationContribution) return sum;
+      return sum + entry.grams;
+    }
+    if (entry.kind === 'dish' && entry.refId) {
+      const recipe = data.library.recipes.find(item => item.id === entry.refId);
+      if (!recipe?.hydrationContribution) return sum;
+      const totalGrams = recipe.ingredients.reduce(
+        (recipeSum, ingredient) => recipeSum + ingredient.grams,
+        0
+      );
+      if (!totalGrams || !recipe.servings) return sum;
+      const servings = entry.servings ?? 1;
+      return sum + (totalGrams / recipe.servings) * servings;
+    }
+    return sum;
+  }, 0);
+  const hydrationEquivalent = drinkHydrationMl + foodHydrationMl;
   const drinkNutritionTotals = useMemo(() => {
     return drinkLogs.reduce(
       (acc, log) => {
@@ -172,33 +217,6 @@ const TrackPage = () => {
       .sort((a, b) => a.dateTime.localeCompare(b.dateTime))
       .slice(-1)[0]?.weightKg;
 
-  const activityContext = {
-    weightKg: resolveWeightForDateTime(toDateTime(selectedDate)),
-    intakeKcal: totals.kcal,
-    activityCoefficient
-  };
-
-  const estimateTraining = (log: {
-    minutes: number;
-    sets?: number;
-    reps?: number;
-    protocolRef?: string;
-  }) =>
-    calcTrainingActivityMetrics(log as ActivityLog, activityDefaults, activityContext, {
-      protocol: log.protocolRef
-        ? data.library.protocols.find(item => item.id === log.protocolRef)
-        : undefined,
-      exercises: data.library.exercises
-    }).calories;
-
-  const estimateMovement = (log: MovementSessionLog) => {
-    const activity = data.library.movementActivities.find(item => item.id === log.activityRef);
-    return calcMovementActivityMetrics(log, activity, activityDefaults, {
-      ...activityContext,
-      weightKg: resolveWeightForDateTime(log.dateTime)
-    }).calories;
-  };
-
   const renderNutritionTags = (tags?: NutritionTag[]) => {
     if (!tags?.length) return null;
     return (
@@ -244,12 +262,120 @@ const TrackPage = () => {
     }, 0),
     calcStepsCoefficient(movementDay?.steps ?? 0, activityDefaults)
   ].reduce((sum, value) => sum + value, 0);
+  const hydrationWeight = data.logs.weight
+    .filter(log => log.dateTime.slice(0, 10) <= selectedDate)
+    .sort((a, b) => a.dateTime.localeCompare(b.dateTime))
+    .slice(-1)[0]?.weightKg;
+  const hydrationBasePerKg = 30;
+  const hydrationActivityBonus = 400;
+  const hydrationTargetMl =
+    hydrationWeight !== undefined
+      ? hydrationWeight * hydrationBasePerKg + activityCoefficient * hydrationActivityBonus
+      : undefined;
+  const hydrationCoefficient = hydrationTargetMl ? hydrationEquivalent / hydrationTargetMl : 0;
   const defaultMovementActivityId = data.library.movementActivities[0]?.id ?? '';
+
+  const activityContext = {
+    weightKg: resolveWeightForDateTime(toDateTime(selectedDate)),
+    intakeKcal: totals.kcal,
+    activityCoefficient
+  };
+
+  const estimateTraining = (log: {
+    minutes: number;
+    sets?: number;
+    reps?: number;
+    protocolRef?: string;
+  }) =>
+    calcTrainingActivityMetrics(log as ActivityLog, activityDefaults, activityContext, {
+      protocol: log.protocolRef
+        ? data.library.protocols.find(item => item.id === log.protocolRef)
+        : undefined,
+      exercises: data.library.exercises
+    }).calories;
+
+  const estimateMovement = (log: MovementSessionLog) => {
+    const activity = data.library.movementActivities.find(item => item.id === log.activityRef);
+    return calcMovementActivityMetrics(log, activity, activityDefaults, {
+      ...activityContext,
+      weightKg: resolveWeightForDateTime(log.dateTime)
+    }).calories;
+  };
 
   useEffect(() => {
     setMovementSteps(movementDay?.steps ?? 0);
   }, [movementDay?.steps, selectedDate]);
 
+  useEffect(() => {
+    if (!defaultDrink) return;
+    setDrinkForm(prev => {
+      if (prev.drinkId && data.library.drinks.find(item => item.id === prev.drinkId)) {
+        return prev;
+      }
+      const portion = defaultDrink.portions[0];
+      return {
+        drinkId: defaultDrink.id,
+        portionLabel: portion?.label ?? '',
+        portionMl: portion?.ml ?? 0,
+        portionsCount: 1,
+        time: currentTimeString()
+      };
+    });
+  }, [defaultDrink, data.library.drinks]);
+
+  const getHydrationStatus = (actual: number, target?: number) => {
+    if (!target) {
+      return { label: 'Цель не задана', tone: 'text-slate-400' };
+    }
+    const ratio = actual / target;
+    if (ratio < 0.6) return { label: 'Недобор', tone: 'text-rose-500' };
+    if (ratio < 0.9) return { label: 'Почти', tone: 'text-amber-500' };
+    if (ratio <= 1.1) return { label: 'В норме', tone: 'text-emerald-500' };
+    return { label: 'Перебор', tone: 'text-sky-500' };
+  };
+
+  const parseTimeToMinutes = (time?: string) => {
+    if (!time) return null;
+    const [hours, minutes] = time.split(':').map(Number);
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+    return hours * 60 + minutes;
+  };
+
+  const formatMinutes = (minutes?: number | null) => {
+    if (!minutes && minutes !== 0) return '—';
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours}ч ${mins}м`;
+  };
+
+  const calcSleepDuration = (log: SleepLog) => {
+    const bed = parseTimeToMinutes(log.bedTime);
+    const wake = parseTimeToMinutes(log.wakeTime);
+    if (bed === null || wake === null) return null;
+    let duration = wake - bed;
+    if (duration <= 0) duration += 24 * 60;
+    return duration;
+  };
+
+  const sleepHistory = useMemo(
+    () =>
+      data.logs.sleep
+        .filter(log => log.date <= selectedDate)
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    [data.logs.sleep, selectedDate]
+  );
+  const recentSleep = sleepHistory.slice(0, 7);
+  const sleepDurations = recentSleep
+    .map(log => calcSleepDuration(log))
+    .filter((value): value is number => value !== null);
+  const avgSleepMinutes = sleepDurations.length
+    ? Math.round(sleepDurations.reduce((sum, value) => sum + value, 0) / sleepDurations.length)
+    : undefined;
+  const anchorRate = recentSleep.length
+    ? Math.round(
+        (recentSleep.filter(log => log.anchorMet).length / recentSleep.length) * 100
+      )
+    : undefined;
 
   const openNewFood = () => {
     setFoodSheet({
@@ -479,7 +605,9 @@ const TrackPage = () => {
         date: selectedDate,
         wakeTime: '07:30',
         bedTime: '23:00',
-        anchorMet: false
+        anchorMet: false,
+        quality1to5: 3,
+        notes: ''
       }
     );
   };
@@ -493,6 +621,32 @@ const TrackPage = () => {
       addSleepLog(payload);
     }
     setSleepDraft(null);
+  };
+
+  const openDrink = (log?: DrinkLog) => {
+    const drink = data.library.drinks.find(item => item.id === log?.drinkId) ?? defaultDrink;
+    const portion = drink?.portions[0];
+    setDrinkDraft(
+      log ?? {
+        id: '',
+        dateTime: toDateTime(selectedDate, currentTimeString()),
+        drinkId: drink?.id ?? '',
+        portionLabel: portion?.label ?? '',
+        portionMl: portion?.ml ?? 0,
+        portionsCount: 1
+      }
+    );
+  };
+
+  const saveDrink = () => {
+    if (!drinkDraft) return;
+    const payload = { ...drinkDraft };
+    if (drinkDraft.id) {
+      updateDrinkLog(payload);
+    } else {
+      addDrinkLog(payload);
+    }
+    setDrinkDraft(null);
   };
 
   const filteredProducts = data.library.products.filter(product =>
@@ -628,12 +782,12 @@ const TrackPage = () => {
         </div>
       )}
 
-      {active === 'Тренировки' && (
+      {active === 'Активность' && (
         <div className="space-y-3">
           <div className="card p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="section-title">
-                Итог: {trainingLogs.reduce((sum, log) => sum + log.minutes, 0)} мин
+                Итог активности: {trainingLogs.reduce((sum, log) => sum + log.minutes, 0)} мин
               </h2>
               <button className="btn-primary w-full sm:w-auto" onClick={() => openTraining()}>
                 Добавить тренировку
@@ -647,9 +801,15 @@ const TrackPage = () => {
               Закрыто по плану: {completedWorkoutCount}
             </p>
           </div>
+
           <div className="card p-4">
-            <h3 className="text-sm font-semibold text-slate-500">Логи тренировок</h3>
-            <div className="mt-2 space-y-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="text-sm font-semibold text-slate-500">Тренировки</h3>
+              <button className="btn-secondary w-full sm:w-auto" onClick={() => openTraining()}>
+                Добавить
+              </button>
+            </div>
+            <div className="mt-3 space-y-2">
               {trainingLogs.length === 0 ? (
                 <p className="text-sm text-slate-500">Записей нет.</p>
               ) : (
@@ -685,14 +845,10 @@ const TrackPage = () => {
               )}
             </div>
           </div>
-        </div>
-      )}
 
-      {active === 'Движение' && (
-        <div className="space-y-3">
           <div className="card space-y-4 p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="section-title">Движение</h2>
+              <h3 className="text-sm font-semibold text-slate-500">Движение</h3>
               <button className="btn-secondary w-full sm:w-auto" onClick={() => openMovement()}>
                 Добавить вручную
               </button>
@@ -775,12 +931,165 @@ const TrackPage = () => {
         </div>
       )}
 
-      {active === 'Курение' && (
+      {active === 'Здоровье' && (
         <div className="space-y-3">
           <div className="card p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="section-title">Водный баланс</h2>
+              <button className="btn-primary w-full sm:w-auto" onClick={() => openDrink()}>
+                Добавить напиток
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-slate-600">
+              Эквивалент воды: {hydrationEquivalent.toFixed(0)} мл · Цель:{' '}
+              {hydrationTargetMl !== undefined ? hydrationTargetMl.toFixed(0) : '—'} мл · Коэф.{' '}
+              {hydrationTargetMl !== undefined ? hydrationCoefficient.toFixed(2) : '—'}
+            </p>
+            <p className="text-xs text-slate-500">
+              Напитки: {drinkTotalMl.toFixed(0)} мл · Еда: {foodHydrationMl.toFixed(0)} мл · Вес:{' '}
+              {hydrationWeight ?? '—'} кг · Активность: {activityCoefficient.toFixed(2)}
+            </p>
+            <p className={`text-xs ${getHydrationStatus(hydrationEquivalent, hydrationTargetMl).tone}`}>
+              {getHydrationStatus(hydrationEquivalent, hydrationTargetMl).label}
+            </p>
+            <div className="mt-4 rounded-2xl border border-slate-200 p-3">
+              <div className="grid gap-2 sm:grid-cols-[1.2fr_1fr_0.6fr_0.8fr_auto] sm:items-end">
+                <label className="text-xs text-slate-500">
+                  Напиток
+                  <select
+                    className="input mt-1"
+                    value={drinkForm.drinkId}
+                    onChange={event => {
+                      const nextId = event.target.value;
+                      const drink = data.library.drinks.find(item => item.id === nextId);
+                      const portion = drink?.portions[0];
+                      setDrinkForm(prev => ({
+                        ...prev,
+                        drinkId: nextId,
+                        portionLabel: portion?.label ?? '',
+                        portionMl: portion?.ml ?? 0
+                      }));
+                    }}
+                  >
+                    {data.library.drinks.map(drink => (
+                      <option key={drink.id} value={drink.id}>
+                        {drink.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs text-slate-500">
+                  Емкость
+                  <select
+                    className="input mt-1"
+                    value={drinkForm.portionLabel}
+                    onChange={event => {
+                      const drink = data.library.drinks.find(item => item.id === drinkForm.drinkId);
+                      const portion = drink?.portions.find(item => item.label === event.target.value);
+                      setDrinkForm(prev => ({
+                        ...prev,
+                        portionLabel: event.target.value,
+                        portionMl: portion?.ml ?? 0
+                      }));
+                    }}
+                  >
+                    {data.library.drinks
+                      .find(item => item.id === drinkForm.drinkId)
+                      ?.portions.map(portion => (
+                        <option key={portion.label} value={portion.label}>
+                          {portion.label}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label className="text-xs text-slate-500">
+                  Порции
+                  <input
+                    type="number"
+                    min={1}
+                    className="input mt-1"
+                    value={drinkForm.portionsCount}
+                    onChange={event =>
+                      setDrinkForm(prev => ({ ...prev, portionsCount: Number(event.target.value) }))
+                    }
+                  />
+                </label>
+                <label className="text-xs text-slate-500">
+                  Время
+                  <input
+                    type="time"
+                    className="input mt-1"
+                    value={drinkForm.time}
+                    onChange={event => setDrinkForm(prev => ({ ...prev, time: event.target.value }))}
+                  />
+                </label>
+                <button
+                  className="btn-primary sm:mb-1"
+                  onClick={() => {
+                    if (!drinkForm.drinkId || !drinkForm.portionLabel || !drinkForm.portionMl) {
+                      return;
+                    }
+                    addDrinkLog({
+                      id: '',
+                      dateTime: toDateTime(selectedDate, drinkForm.time),
+                      drinkId: drinkForm.drinkId,
+                      portionLabel: drinkForm.portionLabel,
+                      portionMl: drinkForm.portionMl,
+                      portionsCount: drinkForm.portionsCount
+                    });
+                    setDrinkForm(prev => ({ ...prev, time: currentTimeString() }));
+                  }}
+                >
+                  Добавить
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="card p-4">
+            <h3 className="text-sm font-semibold text-slate-500">Напитки за день</h3>
+            <div className="mt-2 space-y-2">
+              {drinkLogs.length === 0 ? (
+                <p className="text-sm text-slate-500">Записей нет.</p>
+              ) : (
+                drinkLogs.map(log => {
+                  const drink = data.library.drinks.find(item => item.id === log.drinkId);
+                  return (
+                    <div key={log.id} className="rounded-xl border border-slate-200 p-3">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold">{drink?.name ?? 'Напиток'}</p>
+                          <p className="text-xs text-slate-500">
+                            {log.portionsCount} × {log.portionLabel} ·{' '}
+                            {(log.portionMl * log.portionsCount).toFixed(0)} мл ·{' '}
+                            {new Date(log.dateTime).toLocaleTimeString('ru-RU', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <button className="btn-secondary w-full sm:w-auto" onClick={() => openDrink(log)}>
+                            Изменить
+                          </button>
+                          <button
+                            className="btn-secondary w-full text-red-500 sm:w-auto"
+                            onClick={() => deleteDrinkLog(log.id)}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <div className="card p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="section-title">
-                Итог: {smokingLogs.reduce((sum, log) => sum + log.count, 0)} шт
+                Курение · {smokingLogs.reduce((sum, log) => sum + log.count, 0)} шт
               </h2>
               <button className="btn-primary w-full sm:w-auto" onClick={() => openSmoking()}>
                 Добавить
@@ -789,10 +1098,7 @@ const TrackPage = () => {
             <p className="mt-2 text-sm text-slate-600">
               Цель: {dayPlan?.requirements?.smokingTargetMax ?? '—'} шт
             </p>
-          </div>
-          <div className="card p-4">
-            <h3 className="text-sm font-semibold text-slate-500">Логи</h3>
-            <div className="mt-2 space-y-2">
+            <div className="mt-3 space-y-2">
               {smokingLogs.length === 0 ? (
                 <p className="text-sm text-slate-500">Записей нет.</p>
               ) : (
@@ -820,86 +1126,22 @@ const TrackPage = () => {
               )}
             </div>
           </div>
-        </div>
-      )}
 
-      {active === 'Измерения' && (
-        <div className="space-y-3">
-          <div className="card p-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="section-title">Вес</h2>
-              <button className="btn-primary w-full sm:w-auto" onClick={() => openWeight()}>
-                Добавить
-              </button>
-            </div>
-            <div className="mt-2 space-y-2">
-              {weightLogs.length === 0 ? (
-                <p className="text-sm text-slate-500">Нет записей.</p>
-              ) : (
-                weightLogs.map(log => (
-                  <div key={log.id} className="rounded-xl border border-slate-200 p-3">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-sm font-semibold">{log.weightKg} кг</p>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <button className="btn-secondary w-full sm:w-auto" onClick={() => openWeight(log)}>
-                          Изменить
-                        </button>
-                        <button
-                          className="btn-secondary w-full text-red-500 sm:w-auto"
-                          onClick={() => deleteWeightLog(log.id)}
-                        >
-                          Удалить
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-          <div className="card p-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="section-title">Талия</h2>
-              <button className="btn-primary w-full sm:w-auto" onClick={() => openWaist()}>
-                Добавить
-              </button>
-            </div>
-            <div className="mt-2 space-y-2">
-              {waistLogs.length === 0 ? (
-                <p className="text-sm text-slate-500">Нет записей.</p>
-              ) : (
-                waistLogs.map(log => (
-                  <div key={log.id} className="rounded-xl border border-slate-200 p-3">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-sm font-semibold">{log.waistCm} см</p>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <button className="btn-secondary w-full sm:w-auto" onClick={() => openWaist(log)}>
-                          Изменить
-                        </button>
-                        <button
-                          className="btn-secondary w-full text-red-500 sm:w-auto"
-                          onClick={() => deleteWaistLog(log.id)}
-                        >
-                          Удалить
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {active === 'Сон' && (
-        <div className="space-y-3">
           <div className="card p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="section-title">Сон</h2>
               <button className="btn-primary w-full sm:w-auto" onClick={() => openSleep()}>
                 Добавить
               </button>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-3 text-sm text-slate-600">
+              <p>
+                Средняя длительность (7 дней):{' '}
+                <span className="font-semibold">{formatMinutes(avgSleepMinutes)}</span>
+              </p>
+              <p>
+                Якорь соблюдён: <span className="font-semibold">{anchorRate ?? '—'}%</span>
+              </p>
             </div>
             <div className="mt-2 space-y-2">
               {sleepLogs.length === 0 ? (
@@ -913,7 +1155,12 @@ const TrackPage = () => {
                           {log.bedTime ?? '—'} → {log.wakeTime ?? '—'}
                         </p>
                         <p className="text-xs text-slate-500">
-                          Якорь: {log.anchorMet ? 'да' : 'нет'}
+                          Длительность: {formatMinutes(calcSleepDuration(log))} · Якорь:{' '}
+                          {log.anchorMet ? 'да' : 'нет'}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          Оценка: {log.quality1to5 ?? '—'} / 5
+                          {log.notes ? ` · ${log.notes}` : ''}
                         </p>
                       </div>
                       <div className="flex flex-col gap-2 sm:flex-row">
@@ -931,6 +1178,99 @@ const TrackPage = () => {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+          <div className="card p-4">
+            <h3 className="text-sm font-semibold text-slate-500">История сна (последние 7)</h3>
+            <div className="mt-2 space-y-2">
+              {recentSleep.length === 0 ? (
+                <p className="text-sm text-slate-500">История пуста.</p>
+              ) : (
+                recentSleep.map(log => (
+                  <div key={log.id} className="rounded-xl border border-slate-200 p-3">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold">
+                          {log.date} · {log.bedTime ?? '—'} → {log.wakeTime ?? '—'}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {formatMinutes(calcSleepDuration(log))} · Оценка: {log.quality1to5 ?? '—'} / 5
+                        </p>
+                      </div>
+                      <span className="text-xs text-slate-500">
+                        Якорь: {log.anchorMet ? 'да' : 'нет'}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="card p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="section-title">Вес</h2>
+                <button className="btn-primary w-full sm:w-auto" onClick={() => openWeight()}>
+                  Добавить
+                </button>
+              </div>
+              <div className="mt-2 space-y-2">
+                {weightLogs.length === 0 ? (
+                  <p className="text-sm text-slate-500">Нет записей.</p>
+                ) : (
+                  weightLogs.map(log => (
+                    <div key={log.id} className="rounded-xl border border-slate-200 p-3">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-sm font-semibold">{log.weightKg} кг</p>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <button className="btn-secondary w-full sm:w-auto" onClick={() => openWeight(log)}>
+                            Изменить
+                          </button>
+                          <button
+                            className="btn-secondary w-full text-red-500 sm:w-auto"
+                            onClick={() => deleteWeightLog(log.id)}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            <div className="card p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="section-title">Талия</h2>
+                <button className="btn-primary w-full sm:w-auto" onClick={() => openWaist()}>
+                  Добавить
+                </button>
+              </div>
+              <div className="mt-2 space-y-2">
+                {waistLogs.length === 0 ? (
+                  <p className="text-sm text-slate-500">Нет записей.</p>
+                ) : (
+                  waistLogs.map(log => (
+                    <div key={log.id} className="rounded-xl border border-slate-200 p-3">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-sm font-semibold">{log.waistCm} см</p>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <button className="btn-secondary w-full sm:w-auto" onClick={() => openWaist(log)}>
+                            Изменить
+                          </button>
+                          <button
+                            className="btn-secondary w-full text-red-500 sm:w-auto"
+                            onClick={() => deleteWaistLog(log.id)}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1527,6 +1867,15 @@ const TrackPage = () => {
       >
         {sleepDraft && (
           <>
+            <label className="text-sm font-semibold text-slate-600">Дата</label>
+            <input
+              type="date"
+              className="input"
+              value={sleepDraft.date}
+              onChange={event =>
+                setSleepDraft(prev => (prev ? { ...prev, date: event.target.value } : prev))
+              }
+            />
             <label className="text-sm font-semibold text-slate-600">Отбой</label>
             <input
               type="time"
@@ -1558,7 +1907,112 @@ const TrackPage = () => {
               />
               Якорь выполнен
             </label>
+            <label className="text-sm font-semibold text-slate-600">Качество сна (1-5)</label>
+            <input
+              type="number"
+              min={1}
+              max={5}
+              className="input"
+              value={sleepDraft.quality1to5 ?? 3}
+              onChange={event =>
+                setSleepDraft(prev =>
+                  prev ? { ...prev, quality1to5: Number(event.target.value) } : prev
+                )
+              }
+            />
+            <label className="text-sm font-semibold text-slate-600">Заметки</label>
+            <textarea
+              className="input min-h-[90px]"
+              value={sleepDraft.notes ?? ''}
+              onChange={event =>
+                setSleepDraft(prev => (prev ? { ...prev, notes: event.target.value } : prev))
+              }
+              placeholder="Например: сон прерывистый, поздний спорт"
+            />
             <button className="btn-primary w-full" onClick={saveSleep}>
+              Сохранить
+            </button>
+          </>
+        )}
+      </BottomSheet>
+
+      <BottomSheet
+        open={Boolean(drinkDraft)}
+        title={drinkDraft?.id ? 'Редактировать напиток' : 'Добавить напиток'}
+        onClose={() => setDrinkDraft(null)}
+      >
+        {drinkDraft && (
+          <>
+            <label className="text-sm font-semibold text-slate-600">Напиток</label>
+            <select
+              className="input"
+              value={drinkDraft.drinkId}
+              onChange={event => {
+                const nextId = event.target.value;
+                const drink = data.library.drinks.find(item => item.id === nextId);
+                const portion = drink?.portions[0];
+                setDrinkDraft(prev =>
+                  prev
+                    ? {
+                        ...prev,
+                        drinkId: nextId,
+                        portionLabel: portion?.label ?? '',
+                        portionMl: portion?.ml ?? 0
+                      }
+                    : prev
+                );
+              }}
+            >
+              {data.library.drinks.map(drink => (
+                <option key={drink.id} value={drink.id}>
+                  {drink.name}
+                </option>
+              ))}
+            </select>
+            <label className="text-sm font-semibold text-slate-600">Емкость</label>
+            <select
+              className="input"
+              value={drinkDraft.portionLabel}
+              onChange={event => {
+                const drink = data.library.drinks.find(item => item.id === drinkDraft.drinkId);
+                const portion = drink?.portions.find(item => item.label === event.target.value);
+                setDrinkDraft(prev =>
+                  prev ? { ...prev, portionLabel: event.target.value, portionMl: portion?.ml ?? 0 } : prev
+                );
+              }}
+            >
+              {data.library.drinks
+                .find(item => item.id === drinkDraft.drinkId)
+                ?.portions.map(portion => (
+                  <option key={portion.label} value={portion.label}>
+                    {portion.label}
+                  </option>
+                ))}
+            </select>
+            <label className="text-sm font-semibold text-slate-600">Порции</label>
+            <input
+              type="number"
+              min={1}
+              className="input"
+              value={drinkDraft.portionsCount}
+              onChange={event =>
+                setDrinkDraft(prev =>
+                  prev ? { ...prev, portionsCount: Number(event.target.value) } : prev
+                )
+              }
+            />
+            <label className="text-sm font-semibold text-slate-600">Дата и время</label>
+            <input
+              type="datetime-local"
+              className="input"
+              value={drinkDraft.dateTime.slice(0, 16)}
+              onChange={event =>
+                setDrinkDraft(prev =>
+                  prev ? { ...prev, dateTime: new Date(event.target.value).toISOString() } : prev
+                )
+              }
+            />
+            <button className="btn-primary w-full" onClick={saveDrink}>
               Сохранить
             </button>
           </>

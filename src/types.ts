@@ -170,6 +170,8 @@ export type DayPlan = {
     requirePhotos: Array<'front' | 'side'>;
     smokingTargetMax?: number;
     kcalTarget?: number;
+    sleepWakeTarget?: string;
+    sleepDurationTargetMinutes?: number;
   };
   notes?: string;
 };
@@ -352,6 +354,8 @@ export type SleepLog = {
   wakeTime?: string;
   bedTime?: string;
   anchorMet?: boolean;
+  quality1to5?: number;
+  notes?: string;
 };
 
 export type PhotoMeta = {
