@@ -4,13 +4,14 @@ import { WorkoutRunner } from '../components/WorkoutRunner';
 import { savePhotoBlob } from '../storage/photoDb';
 import { useAppStore } from '../store/useAppStore';
 import { combineDateTime, currentTimeString, formatDate, todayISO } from '../utils/date';
-import { calcFoodEntry, calcRecipeNutrition } from '../utils/nutrition';
+import { calcFoodEntry, calcMealPlanItem, calcRecipeNutrition } from '../utils/nutrition';
 import {
   FoodEntry,
   GeoPoint,
   MealComponent,
   MealComponentType,
   MovementSessionLog,
+  NutritionTag,
   WorkoutPlanItem
 } from '../types';
 import { useNavigate } from 'react-router-dom';
@@ -34,6 +35,12 @@ const cheatLabels: Record<NonNullable<FoodEntry['cheatCategory']>, string> = {
   fastfood: 'Фастфуд',
   sweets: 'Сладкое',
   other: 'Другое'
+};
+
+const nutritionTagLabels: Record<NutritionTag, string> = {
+  snack: 'Перекус',
+  cheat: 'Читмил',
+  healthy: 'Правильное питание'
 };
 
 const photoLabels: Record<'front' | 'side', string> = {
@@ -114,7 +121,11 @@ const TodayPage = () => {
     time: currentTimeString(),
     title: '',
     kcalOverride: '',
-    cheatCategory: 'pizza' as FoodEntry['cheatCategory']
+    proteinOverride: '',
+    fatOverride: '',
+    carbOverride: '',
+    cheatCategory: 'pizza' as FoodEntry['cheatCategory'],
+    nutritionTags: [] as NutritionTag[]
   });
   const [trainingForm, setTrainingForm] = useState({
     minutes: 45,
@@ -154,6 +165,16 @@ const TodayPage = () => {
 
   const dayPlan = data.planner.dayPlans.find(plan => plan.date === selectedDate);
   const foodDay = data.logs.foodDays.find(day => day.date === selectedDate);
+  const nutritionTargets = dayPlan?.nutritionTargets ?? {};
+  const plannedMealsCount = dayPlan
+    ? (Object.keys(mealLabels) as FoodEntry['meal'][]).filter(
+        meal => dayPlan.mealsPlan[meal].length > 0 || Boolean(dayPlan.mealTimes?.[meal])
+      ).length
+    : 0;
+  const actualMealsCount = useMemo(() => {
+    const entries = foodDay?.entries ?? [];
+    return new Set(entries.map(entry => entry.meal)).size;
+  }, [foodDay]);
 
   const totals = useMemo(() => {
     const entries = foodDay?.entries ?? [];
@@ -170,6 +191,32 @@ const TodayPage = () => {
       { kcal: 0, protein: 0, fat: 0, carb: 0 }
     );
   }, [foodDay, data.library]);
+
+  const plannedTotals = useMemo(() => {
+    if (!dayPlan?.mealsPlan) return { kcal: 0, protein: 0, fat: 0, carb: 0 };
+    return Object.values(dayPlan.mealsPlan)
+      .flat()
+      .reduce(
+        (acc, item) => {
+          const macro = calcMealPlanItem(item, data.library);
+          return {
+            kcal: acc.kcal + macro.kcal,
+            protein: acc.protein + macro.protein,
+            fat: acc.fat + macro.fat,
+            carb: acc.carb + macro.carb
+          };
+        },
+        { kcal: 0, protein: 0, fat: 0, carb: 0 }
+      );
+  }, [dayPlan, data.library]);
+  const mealTarget = nutritionTargets.meals ?? plannedMealsCount;
+  const kcalTarget = nutritionTargets.kcal ?? (plannedTotals.kcal ? Math.round(plannedTotals.kcal) : undefined);
+  const formatDelta = (actual: number, target?: number) => {
+    if (target === undefined) return '—';
+    const delta = actual - target;
+    const sign = delta > 0 ? '+' : '';
+    return `${sign}${delta.toFixed(0)}`;
+  };
 
   const movementSessions = data.logs.movementSessions.filter(
     log => log.dateTime.slice(0, 10) === selectedDate
@@ -199,6 +246,48 @@ const TodayPage = () => {
     const date = new Date(selectedDate);
     date.setDate(date.getDate() + days);
     setSelectedDate(date.toISOString().slice(0, 10));
+  };
+
+  const resolveFoodTags = (draft: typeof foodForm) => {
+    const tags = draft.nutritionTags.length ? [...draft.nutritionTags] : [];
+    if (draft.kind === 'product' && draft.refId) {
+      const product = data.library.products.find(item => item.id === draft.refId);
+      if (product?.nutritionTags?.length) {
+        tags.push(...product.nutritionTags);
+      }
+    }
+    if (draft.kind === 'dish' && draft.refId) {
+      const recipe = data.library.recipes.find(item => item.id === draft.refId);
+      if (recipe?.nutritionTags?.length) {
+        tags.push(...recipe.nutritionTags);
+      }
+    }
+    if (draft.kind === 'cheat') {
+      tags.push('cheat');
+    }
+    if (draft.meal === 'snack') {
+      tags.push('snack');
+    }
+    return Array.from(new Set(tags));
+  };
+
+  const toggleFoodTag = (tag: NutritionTag) => {
+    setFoodForm(prev => ({
+      ...prev,
+      nutritionTags: prev.nutritionTags.includes(tag)
+        ? prev.nutritionTags.filter(item => item !== tag)
+        : [...prev.nutritionTags, tag]
+    }));
+  };
+
+  const openFoodSheet = (meal: FoodEntry['meal'], tags: NutritionTag[] = []) => {
+    setFoodForm(prev => ({
+      ...prev,
+      meal,
+      time: currentTimeString(),
+      nutritionTags: tags
+    }));
+    setSheet('food');
   };
 
   const toDateTime = (date: string, time?: string) => combineDateTime(date, time);
@@ -588,6 +677,19 @@ const TodayPage = () => {
     return entry.title ?? 'Запись';
   };
 
+  const renderNutritionTags = (tags?: NutritionTag[]) => {
+    if (!tags?.length) return null;
+    return (
+      <div className="flex flex-wrap gap-1 text-[11px] text-slate-500">
+        {tags.map(tag => (
+          <span key={tag} className="badge">
+            {nutritionTagLabels[tag]}
+          </span>
+        ))}
+      </div>
+    );
+  };
+
   const plannedMealKeys = dayPlan
     ? (Object.keys(mealLabels) as FoodEntry['meal'][]).filter(
         meal => mealComponents[meal].length > 0 || Boolean(mealTimes[meal] || '')
@@ -866,8 +968,21 @@ const TodayPage = () => {
         <h2 className="section-title">Итоги дня</h2>
         <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
           <div className="rounded-xl bg-slate-50 p-3">
-            <p className="text-xs uppercase text-slate-400">Калории</p>
-            <p className="text-lg font-semibold">{totals.kcal.toFixed(0)} ккал</p>
+            <p className="text-xs uppercase text-slate-400">КБЖУ</p>
+            <p className="text-lg font-semibold">
+              {totals.kcal.toFixed(0)} / {nutritionTargets.kcal ?? '—'} ккал
+            </p>
+            <p className="text-xs text-slate-400">
+              Б {totals.protein.toFixed(0)} / {nutritionTargets.protein ?? '—'} · Ж{' '}
+              {totals.fat.toFixed(0)} / {nutritionTargets.fat ?? '—'} · У{' '}
+              {totals.carb.toFixed(0)} / {nutritionTargets.carb ?? '—'}
+            </p>
+            <p className="text-[11px] text-slate-400">
+              Δ ккал {formatDelta(totals.kcal, kcalTarget)} · Б{' '}
+              {formatDelta(totals.protein, nutritionTargets.protein)} · Ж{' '}
+              {formatDelta(totals.fat, nutritionTargets.fat)} · У{' '}
+              {formatDelta(totals.carb, nutritionTargets.carb)}
+            </p>
           </div>
           <div className="rounded-xl bg-slate-50 p-3">
             <p className="text-xs uppercase text-slate-400">Движение</p>
@@ -888,6 +1003,15 @@ const TodayPage = () => {
           <div className="rounded-xl bg-slate-50 p-3">
             <p className="text-xs uppercase text-slate-400">Вес</p>
             <p className="text-lg font-semibold">{lastWeight ? `${lastWeight} кг` : '—'}</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-3">
+            <p className="text-xs uppercase text-slate-400">Приемы пищи</p>
+            <p className="text-lg font-semibold">
+              {actualMealsCount}/{mealTarget || '—'}
+            </p>
+            <p className="text-xs text-slate-400">
+              План приемов: {plannedMealsCount || '—'}
+            </p>
           </div>
         </div>
       </div>
@@ -917,7 +1041,10 @@ const TodayPage = () => {
           <div className="rounded-xl bg-slate-50 p-3">
             <p className="uppercase text-[10px]">Питание</p>
             <p className="text-sm font-semibold text-slate-700">
-              {plannedMealItems.filter(item => item.completed).length}/{plannedMealItems.length || 0}
+              {actualMealsCount}/{mealTarget || '—'}
+            </p>
+            <p className="text-[11px] text-slate-400">
+              Ккал: {totals.kcal.toFixed(0)} · Δ {formatDelta(totals.kcal, kcalTarget)}
             </p>
           </div>
           <div className="rounded-xl bg-slate-50 p-3">
@@ -1157,12 +1284,7 @@ const TodayPage = () => {
                                 <button
                                   className="btn-secondary w-full sm:w-auto"
                                   onClick={() => {
-                                    setFoodForm(prev => ({
-                                      ...prev,
-                                      meal: item.meal,
-                                      time: currentTimeString()
-                                    }));
-                                    setSheet('food');
+                                    openFoodSheet(item.meal, item.meal === 'snack' ? ['snack'] : []);
                                   }}
                                 >
                                   Отметить прием
@@ -1195,6 +1317,7 @@ const TodayPage = () => {
                             </div>
                             <span className="badge">Дополнительно</span>
                           </div>
+                          {renderNutritionTags(item.entry?.nutritionTags)}
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <button
                               className="btn-secondary w-full sm:w-auto"
@@ -1591,7 +1714,23 @@ const TodayPage = () => {
           </div>
 
           <div className="card p-4 space-y-3" id="meal-plan">
-            <h2 className="section-title">Питание по плану</h2>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="section-title">Питание по плану</h2>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  className="btn-secondary w-full sm:w-auto"
+                  onClick={() => openFoodSheet('breakfast')}
+                >
+                  Добавить питание
+                </button>
+                <button
+                  className="btn-secondary w-full sm:w-auto"
+                  onClick={() => openFoodSheet('snack', ['snack'])}
+                >
+                  Перекус
+                </button>
+              </div>
+            </div>
             {(Object.keys(mealLabels) as FoodEntry['meal'][]).map(meal => (
               <div key={meal} className="space-y-2">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1940,7 +2079,15 @@ const TodayPage = () => {
             <select
               className="input"
               value={foodForm.refId}
-              onChange={event => setFoodForm(prev => ({ ...prev, refId: event.target.value }))}
+              onChange={event =>
+                setFoodForm(prev => {
+                  const refId = event.target.value;
+                  const tags =
+                    data.library.products.find(product => product.id === refId)?.nutritionTags ??
+                    [];
+                  return { ...prev, refId, nutritionTags: tags };
+                })
+              }
             >
               <option value="">Выберите продукт</option>
               {data.library.products.map(product => (
@@ -1989,7 +2136,14 @@ const TodayPage = () => {
             <select
               className="input"
               value={foodForm.refId}
-              onChange={event => setFoodForm(prev => ({ ...prev, refId: event.target.value }))}
+              onChange={event =>
+                setFoodForm(prev => {
+                  const refId = event.target.value;
+                  const tags =
+                    data.library.recipes.find(recipe => recipe.id === refId)?.nutritionTags ?? [];
+                  return { ...prev, refId, nutritionTags: tags };
+                })
+              }
             >
               <option value="">Выберите блюдо</option>
               {data.library.recipes.map(recipe => (
@@ -2048,8 +2202,54 @@ const TodayPage = () => {
                 setFoodForm(prev => ({ ...prev, kcalOverride: event.target.value }))
               }
             />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="number"
+                className="input"
+                placeholder="Белки"
+                value={foodForm.proteinOverride}
+                onChange={event =>
+                  setFoodForm(prev => ({ ...prev, proteinOverride: event.target.value }))
+                }
+              />
+              <input
+                type="number"
+                className="input"
+                placeholder="Жиры"
+                value={foodForm.fatOverride}
+                onChange={event =>
+                  setFoodForm(prev => ({ ...prev, fatOverride: event.target.value }))
+                }
+              />
+              <input
+                type="number"
+                className="input"
+                placeholder="Углеводы"
+                value={foodForm.carbOverride}
+                onChange={event =>
+                  setFoodForm(prev => ({ ...prev, carbOverride: event.target.value }))
+                }
+              />
+            </div>
           </>
         )}
+
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-slate-600">Метки питания</p>
+          <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+            {(Object.keys(nutritionTagLabels) as NutritionTag[]).map(tag => (
+              <label key={tag} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={foodForm.nutritionTags.includes(tag)}
+                  onChange={() => toggleFoodTag(tag)}
+                />
+                {nutritionTagLabels[tag]}
+              </label>
+            ))}
+          </div>
+        </div>
 
         <button
           className="btn-primary w-full"
@@ -2067,7 +2267,20 @@ const TodayPage = () => {
                 (foodForm.kind === 'free' || foodForm.kind === 'cheat') && foodForm.kcalOverride
                   ? Number(foodForm.kcalOverride)
                   : undefined,
-              cheatCategory: foodForm.kind === 'cheat' ? foodForm.cheatCategory : undefined
+              proteinOverride:
+                (foodForm.kind === 'free' || foodForm.kind === 'cheat') && foodForm.proteinOverride
+                  ? Number(foodForm.proteinOverride)
+                  : undefined,
+              fatOverride:
+                (foodForm.kind === 'free' || foodForm.kind === 'cheat') && foodForm.fatOverride
+                  ? Number(foodForm.fatOverride)
+                  : undefined,
+              carbOverride:
+                (foodForm.kind === 'free' || foodForm.kind === 'cheat') && foodForm.carbOverride
+                  ? Number(foodForm.carbOverride)
+                  : undefined,
+              cheatCategory: foodForm.kind === 'cheat' ? foodForm.cheatCategory : undefined,
+              nutritionTags: resolveFoodTags(foodForm)
             });
             setSheet(null);
           }}

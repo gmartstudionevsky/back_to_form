@@ -1,12 +1,13 @@
 import { useMemo, useState, useEffect } from 'react';
 import { BottomSheet } from '../components/BottomSheet';
 import { useAppStore } from '../store/useAppStore';
-import { calcFoodEntry, calcRecipeNutrition } from '../utils/nutrition';
+import { calcFoodEntry, calcMealPlanItem } from '../utils/nutrition';
 import { combineDateTime, currentTimeString, todayISO } from '../utils/date';
 import { getTimeOfDayFromDateTime, timeOfDayLabels } from '../utils/timeOfDay';
 import {
   ActivityLog,
   FoodEntry,
+  NutritionTag,
   SleepLog,
   SmokingLog,
   WaistLog,
@@ -21,6 +22,9 @@ type Tab = (typeof tabs)[number];
 type FoodDraft = FoodEntry & {
   date: string;
   kcalOverrideText?: string;
+  proteinOverrideText?: string;
+  fatOverrideText?: string;
+  carbOverrideText?: string;
 };
 
 const mealLabels: Record<FoodEntry['meal'], string> = {
@@ -28,6 +32,12 @@ const mealLabels: Record<FoodEntry['meal'], string> = {
   lunch: 'Обед',
   dinner: 'Ужин',
   snack: 'Перекус'
+};
+
+const nutritionTagLabels: Record<NutritionTag, string> = {
+  snack: 'Перекус',
+  cheat: 'Читмил',
+  healthy: 'Правильное питание'
 };
 
 const TrackPage = () => {
@@ -88,20 +98,18 @@ const TrackPage = () => {
 
   const plannedMeals = dayPlan?.mealsPlan;
   const plannedMealItems = plannedMeals ? Object.values(plannedMeals).flat() : [];
-  const plannedKcal = plannedMealItems.reduce((sum, item) => {
-    if (item.kind === 'product' && item.refId && item.plannedGrams) {
-      const product = data.library.products.find(prod => prod.id === item.refId);
-      if (!product) return sum;
-      return sum + (product.kcalPer100g * item.plannedGrams) / 100;
-    }
-    if (item.kind === 'dish' && item.refId) {
-      const dish = data.library.recipes.find(rec => rec.id === item.refId);
-      if (!dish) return sum;
-      const nutrition = calcRecipeNutrition(dish, data.library);
-      return sum + nutrition.perServing.kcal * (item.plannedServings ?? 1);
-    }
-    return sum;
-  }, 0);
+  const plannedTotals = plannedMealItems.reduce(
+    (sum, item) => {
+      const nutrition = calcMealPlanItem(item, data.library);
+      return {
+        kcal: sum.kcal + nutrition.kcal,
+        protein: sum.protein + nutrition.protein,
+        fat: sum.fat + nutrition.fat,
+        carb: sum.carb + nutrition.carb
+      };
+    },
+    { kcal: 0, protein: 0, fat: 0, carb: 0 }
+  );
   const plannedDone = plannedMealItems.filter(item => item.completed).length;
   const plannedCompletion = plannedMealItems.length
     ? Math.round((plannedDone / plannedMealItems.length) * 100)
@@ -130,6 +138,19 @@ const TrackPage = () => {
 
   const toDateTime = (date: string, time?: string) => combineDateTime(date, time);
 
+  const renderNutritionTags = (tags?: NutritionTag[]) => {
+    if (!tags?.length) return null;
+    return (
+      <div className="mt-2 flex flex-wrap gap-1 text-[11px] text-slate-500">
+        {tags.map(tag => (
+          <span key={tag} className="badge">
+            {nutritionTagLabels[tag]}
+          </span>
+        ))}
+      </div>
+    );
+  };
+
   const movementDay = data.logs.movementDays.find(day => day.date === selectedDate);
   const movementSessions = data.logs.movementSessions.filter(
     log => log.dateTime.slice(0, 10) === selectedDate
@@ -153,7 +174,45 @@ const TrackPage = () => {
       time: currentTimeString(),
       title: '',
       kcalOverrideText: '',
-      cheatCategory: 'pizza'
+      proteinOverrideText: '',
+      fatOverrideText: '',
+      carbOverrideText: '',
+      cheatCategory: 'pizza',
+      nutritionTags: []
+    });
+  };
+
+  const resolveFoodTags = (draft: FoodDraft) => {
+    const tags = draft.nutritionTags?.length ? [...draft.nutritionTags] : [];
+    if (draft.kind === 'product' && draft.refId) {
+      const product = data.library.products.find(item => item.id === draft.refId);
+      if (product?.nutritionTags?.length) {
+        tags.push(...product.nutritionTags);
+      }
+    }
+    if (draft.kind === 'dish' && draft.refId) {
+      const recipe = data.library.recipes.find(item => item.id === draft.refId);
+      if (recipe?.nutritionTags?.length) {
+        tags.push(...recipe.nutritionTags);
+      }
+    }
+    if (draft.kind === 'cheat') {
+      tags.push('cheat');
+    }
+    if (draft.meal === 'snack') {
+      tags.push('snack');
+    }
+    return Array.from(new Set(tags));
+  };
+
+  const toggleFoodTag = (tag: NutritionTag) => {
+    setFoodSheet(prev => {
+      if (!prev) return prev;
+      const tags = prev.nutritionTags ?? [];
+      return {
+        ...prev,
+        nutritionTags: tags.includes(tag) ? tags.filter(item => item !== tag) : [...tags, tag]
+      };
     });
   };
 
@@ -172,8 +231,21 @@ const TrackPage = () => {
         (foodSheet.kind === 'free' || foodSheet.kind === 'cheat') && foodSheet.kcalOverrideText
           ? Number(foodSheet.kcalOverrideText)
           : undefined,
+      proteinOverride:
+        (foodSheet.kind === 'free' || foodSheet.kind === 'cheat') && foodSheet.proteinOverrideText
+          ? Number(foodSheet.proteinOverrideText)
+          : undefined,
+      fatOverride:
+        (foodSheet.kind === 'free' || foodSheet.kind === 'cheat') && foodSheet.fatOverrideText
+          ? Number(foodSheet.fatOverrideText)
+          : undefined,
+      carbOverride:
+        (foodSheet.kind === 'free' || foodSheet.kind === 'cheat') && foodSheet.carbOverrideText
+          ? Number(foodSheet.carbOverrideText)
+          : undefined,
       notes: foodSheet.notes,
-      cheatCategory: foodSheet.kind === 'cheat' ? foodSheet.cheatCategory : undefined
+      cheatCategory: foodSheet.kind === 'cheat' ? foodSheet.cheatCategory : undefined,
+      nutritionTags: resolveFoodTags(foodSheet)
     };
     if (foodSheet.id) {
       updateFoodEntry(foodSheet.date, payload);
@@ -381,19 +453,20 @@ const TrackPage = () => {
           <div className="card p-4">
             <h2 className="section-title">План vs факт</h2>
             <p className="mt-2 text-sm text-slate-600">
-              План: {plannedKcal.toFixed(0)} ккал · Факт: {totals.kcal.toFixed(0)} ккал
+              План: {plannedTotals.kcal.toFixed(0)} ккал · Б {plannedTotals.protein.toFixed(0)} /
+              Ж {plannedTotals.fat.toFixed(0)} / У {plannedTotals.carb.toFixed(0)}
             </p>
             <p className="text-xs text-slate-500">
               Выполнено: {plannedDone}/{plannedMealItems.length} ({plannedCompletion}%)
             </p>
           </div>
           <div className="card p-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="section-title">Итог дня</h2>
-            <button className="btn-primary w-full sm:w-auto" onClick={openNewFood}>
-              Добавить запись
-            </button>
-          </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="section-title">Итог дня</h2>
+              <button className="btn-primary w-full sm:w-auto" onClick={openNewFood}>
+                Добавить запись
+              </button>
+            </div>
             <p className="mt-2 text-sm text-slate-600">
               Калории: {totals.kcal.toFixed(0)} | Б: {totals.protein.toFixed(1)} г | Ж:{' '}
               {totals.fat.toFixed(1)} г | У: {totals.carb.toFixed(1)} г
@@ -423,6 +496,7 @@ const TrackPage = () => {
                             {entry.servings ? `${entry.servings} порц.` : ''}
                             {entry.kcalOverride ? `${entry.kcalOverride} ккал` : ''}
                           </p>
+                          {renderNutritionTags(entry.nutritionTags)}
                         </div>
                         <div className="flex flex-col gap-2 sm:flex-row">
                           <button
@@ -431,7 +505,10 @@ const TrackPage = () => {
                               setFoodSheet({
                                 ...entry,
                                 date: selectedDate,
-                                kcalOverrideText: entry.kcalOverride?.toString() ?? ''
+                                kcalOverrideText: entry.kcalOverride?.toString() ?? '',
+                                proteinOverrideText: entry.proteinOverride?.toString() ?? '',
+                                fatOverrideText: entry.fatOverride?.toString() ?? '',
+                                carbOverrideText: entry.carbOverride?.toString() ?? ''
                               })
                             }
                           >
@@ -831,7 +908,14 @@ const TrackPage = () => {
                   className="input"
                   value={foodSheet.refId ?? ''}
                   onChange={event =>
-                    setFoodSheet(prev => (prev ? { ...prev, refId: event.target.value } : prev))
+                    setFoodSheet(prev => {
+                      if (!prev) return prev;
+                      const refId = event.target.value;
+                      const tags =
+                        data.library.products.find(product => product.id === refId)?.nutritionTags ??
+                        [];
+                      return { ...prev, refId, nutritionTags: tags };
+                    })
                   }
                 >
                   <option value="">Выберите продукт</option>
@@ -888,7 +972,14 @@ const TrackPage = () => {
                   className="input"
                   value={foodSheet.refId ?? ''}
                   onChange={event =>
-                    setFoodSheet(prev => (prev ? { ...prev, refId: event.target.value } : prev))
+                    setFoodSheet(prev => {
+                      if (!prev) return prev;
+                      const refId = event.target.value;
+                      const tags =
+                        data.library.recipes.find(recipe => recipe.id === refId)?.nutritionTags ??
+                        [];
+                      return { ...prev, refId, nutritionTags: tags };
+                    })
                   }
                 >
                   <option value="">Выберите блюдо</option>
@@ -957,8 +1048,60 @@ const TrackPage = () => {
                     )
                   }
                 />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="number"
+                    className="input"
+                    placeholder="Белки"
+                    value={foodSheet.proteinOverrideText ?? ''}
+                    onChange={event =>
+                      setFoodSheet(prev =>
+                        prev ? { ...prev, proteinOverrideText: event.target.value } : prev
+                      )
+                    }
+                  />
+                  <input
+                    type="number"
+                    className="input"
+                    placeholder="Жиры"
+                    value={foodSheet.fatOverrideText ?? ''}
+                    onChange={event =>
+                      setFoodSheet(prev =>
+                        prev ? { ...prev, fatOverrideText: event.target.value } : prev
+                      )
+                    }
+                  />
+                  <input
+                    type="number"
+                    className="input"
+                    placeholder="Углеводы"
+                    value={foodSheet.carbOverrideText ?? ''}
+                    onChange={event =>
+                      setFoodSheet(prev =>
+                        prev ? { ...prev, carbOverrideText: event.target.value } : prev
+                      )
+                    }
+                  />
+                </div>
               </>
             )}
+
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-slate-600">Метки питания</p>
+              <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+                {(Object.keys(nutritionTagLabels) as NutritionTag[]).map(tag => (
+                  <label key={tag} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={foodSheet.nutritionTags?.includes(tag) ?? false}
+                      onChange={() => toggleFoodTag(tag)}
+                    />
+                    {nutritionTagLabels[tag]}
+                  </label>
+                ))}
+              </div>
+            </div>
 
             <button className="btn-primary w-full" onClick={saveFood}>
               Сохранить

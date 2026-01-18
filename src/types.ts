@@ -30,6 +30,16 @@ export type Protocol = {
 
 export type PortionPreset = { label: string; grams: number };
 
+export type NutritionTag = 'snack' | 'cheat' | 'healthy';
+
+export type NutritionTargets = {
+  kcal?: number;
+  protein?: number;
+  fat?: number;
+  carb?: number;
+  meals?: number;
+};
+
 export type Product = {
   id: UUID;
   name: string;
@@ -38,6 +48,7 @@ export type Product = {
   fatPer100g?: number;
   carbPer100g?: number;
   portionPresets?: PortionPreset[];
+  nutritionTags?: NutritionTag[];
   notes?: string;
 };
 
@@ -53,6 +64,7 @@ export type Recipe = {
   tags: string[];
   category: 'breakfast' | 'main' | 'side' | 'salad' | 'snack' | 'dessert' | 'drink' | 'cheat';
   complexity?: 'easy' | 'medium';
+  nutritionTags?: NutritionTag[];
 };
 
 export type Rule = {
@@ -117,6 +129,7 @@ export type DayPlan = {
     snack?: string;
   };
   workoutsPlan: WorkoutPlanItem[];
+  nutritionTargets?: NutritionTargets;
   requirements: {
     requireWeight: boolean;
     requireWaist: boolean;
@@ -136,9 +149,13 @@ export type FoodEntry = {
   grams?: number;
   servings?: number;
   kcalOverride?: number;
+  proteinOverride?: number;
+  fatOverride?: number;
+  carbOverride?: number;
   title?: string;
   notes?: string;
   cheatCategory?: 'pizza' | 'fastfood' | 'sweets' | 'other';
+  nutritionTags?: NutritionTag[];
 };
 
 export type MealPlanItem = {
@@ -148,10 +165,15 @@ export type MealPlanItem = {
   title?: string;
   plannedGrams?: number;
   plannedServings?: number;
+  plannedKcal?: number;
+  plannedProtein?: number;
+  plannedFat?: number;
+  plannedCarb?: number;
   plannedTime?: string;
   notes?: string;
   cheatCategory?: 'pizza' | 'fastfood' | 'sweets' | 'other';
   completed?: boolean;
+  nutritionTags?: NutritionTag[];
 };
 
 export type MealComponentType =

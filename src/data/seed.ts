@@ -1,6 +1,6 @@
 import { AppData } from '../types';
 
-export const schemaVersion = 7;
+export const schemaVersion = 8;
 
 export const seedData: AppData = {
   schemaVersion,
@@ -216,6 +216,7 @@ export const seedData: AppData = {
         proteinPer100g: 9,
         fatPer100g: 5,
         carbPer100g: 4,
+        nutritionTags: ['snack', 'healthy'],
         portionPresets: [{ label: '1 стакан', grams: 200 }]
       },
       {
@@ -224,7 +225,8 @@ export const seedData: AppData = {
         kcalPer100g: 120,
         proteinPer100g: 16,
         fatPer100g: 5,
-        carbPer100g: 3
+        carbPer100g: 3,
+        nutritionTags: ['healthy']
       },
       {
         id: 'prod-kefir',
@@ -233,6 +235,7 @@ export const seedData: AppData = {
         proteinPer100g: 3,
         fatPer100g: 3,
         carbPer100g: 4,
+        nutritionTags: ['snack', 'healthy'],
         portionPresets: [{ label: '250 мл', grams: 250 }]
       },
       {
@@ -242,6 +245,7 @@ export const seedData: AppData = {
         proteinPer100g: 7,
         fatPer100g: 1,
         carbPer100g: 80,
+        nutritionTags: ['healthy'],
         portionPresets: [{ label: '50 г сухого', grams: 50 }]
       },
       {
@@ -251,6 +255,7 @@ export const seedData: AppData = {
         proteinPer100g: 12,
         fatPer100g: 3,
         carbPer100g: 68,
+        nutritionTags: ['healthy'],
         portionPresets: [{ label: '60 г сухого', grams: 60 }]
       },
       {
@@ -305,12 +310,14 @@ export const seedData: AppData = {
         id: 'prod-banana',
         name: 'Банан (approx)',
         kcalPer100g: 89,
+        nutritionTags: ['snack'],
         portionPresets: [{ label: '1 банан', grams: 120 }]
       },
       {
         id: 'prod-apple',
         name: 'Яблоко (approx)',
         kcalPer100g: 52,
+        nutritionTags: ['snack', 'healthy'],
         portionPresets: [{ label: '1 яблоко', grams: 150 }]
       },
       {
@@ -333,7 +340,8 @@ export const seedData: AppData = {
         steps: ['Смешайте специи.', 'Запекайте 25–30 мин при 200°С.'],
         notes: 'Соль/перец по вкусу.',
         tags: ['ужин'],
-        category: 'main'
+        category: 'main',
+        nutritionTags: ['healthy']
       },
       {
         id: 'rec-cooked-rice',
@@ -342,7 +350,8 @@ export const seedData: AppData = {
         ingredients: [{ productRef: 'prod-rice', grams: 150 }],
         steps: ['Промыть рис.', 'Варить 18–20 мин.'],
         tags: ['гарнир'],
-        category: 'side'
+        category: 'side',
+        nutritionTags: ['healthy']
       },
       {
         id: 'rec-cooked-buckwheat',
@@ -351,7 +360,8 @@ export const seedData: AppData = {
         ingredients: [{ productRef: 'prod-buckwheat', grams: 180 }],
         steps: ['Промыть гречку.', 'Варить 15–18 мин.'],
         tags: ['гарнир'],
-        category: 'side'
+        category: 'side',
+        nutritionTags: ['healthy']
       },
       {
         id: 'rec-boiled-potatoes',
@@ -360,7 +370,8 @@ export const seedData: AppData = {
         ingredients: [{ productRef: 'prod-potatoes', grams: 600 }],
         steps: ['Очистить.', 'Варить 20–25 мин.'],
         tags: ['гарнир'],
-        category: 'side'
+        category: 'side',
+        nutritionTags: ['healthy']
       },
       {
         id: 'rec-salad',
@@ -374,7 +385,8 @@ export const seedData: AppData = {
         ],
         steps: ['Нарезать.', 'Смешать.', 'Заправить.'],
         tags: ['салат'],
-        category: 'salad'
+        category: 'salad',
+        nutritionTags: ['healthy']
       },
       {
         id: 'rec-baked-fish',
@@ -386,7 +398,8 @@ export const seedData: AppData = {
         ],
         steps: ['Сбрызнуть лимоном.', 'Запечь 20 мин.'],
         tags: ['ужин'],
-        category: 'main'
+        category: 'main',
+        nutritionTags: ['healthy']
       },
       {
         id: 'rec-turkey-patties',
@@ -398,7 +411,8 @@ export const seedData: AppData = {
         ],
         steps: ['Смешать фарш и лук.', 'Сформировать котлеты.', 'Обжарить/запечь.'],
         tags: ['обед'],
-        category: 'main'
+        category: 'main',
+        nutritionTags: ['healthy']
       },
       {
         id: 'rec-omelet',
@@ -410,7 +424,8 @@ export const seedData: AppData = {
         ],
         steps: ['Взбить яйца.', 'Добавить брокколи.', 'Готовить 6–8 мин.'],
         tags: ['завтрак'],
-        category: 'breakfast'
+        category: 'breakfast',
+        nutritionTags: ['healthy']
       }
     ],
     drinks: [
@@ -606,6 +621,13 @@ export const seedData: AppData = {
           }
         ],
         plannedSteps: 8000,
+        nutritionTargets: {
+          kcal: 1800,
+          protein: 130,
+          fat: 60,
+          carb: 180,
+          meals: 3
+        },
         requirements: {
           requireWeight: true,
           requireWaist: false,
@@ -681,6 +703,13 @@ export const seedData: AppData = {
           }
         ],
         plannedSteps: 9000,
+        nutritionTargets: {
+          kcal: 1800,
+          protein: 130,
+          fat: 60,
+          carb: 180,
+          meals: 3
+        },
         requirements: {
           requireWeight: false,
           requireWaist: true,
@@ -756,6 +785,13 @@ export const seedData: AppData = {
           }
         ],
         plannedSteps: 7000,
+        nutritionTargets: {
+          kcal: 1750,
+          protein: 125,
+          fat: 55,
+          carb: 170,
+          meals: 3
+        },
         requirements: {
           requireWeight: false,
           requireWaist: false,
