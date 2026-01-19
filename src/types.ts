@@ -108,7 +108,16 @@ export type Recipe = {
   steps: string[];
   notes?: string;
   tags: string[];
-  category: 'breakfast' | 'main' | 'side' | 'salad' | 'snack' | 'dessert' | 'drink' | 'cheat';
+  category:
+    | 'breakfast'
+    | 'main'
+    | 'side'
+    | 'salad'
+    | 'soup'
+    | 'snack'
+    | 'dessert'
+    | 'drink'
+    | 'cheat';
   cookingType: CookingType;
   complexity?: 'easy' | 'medium';
   nutritionTags?: NutritionTag[];

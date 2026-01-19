@@ -660,6 +660,7 @@ const LibraryPage = () => {
                     <option value="main">Основное</option>
                     <option value="side">Гарнир</option>
                     <option value="salad">Салат</option>
+                    <option value="soup">Суп</option>
                     <option value="snack">Перекус</option>
                     <option value="dessert">Десерт</option>
                     <option value="drink">Напиток</option>
@@ -1507,6 +1508,7 @@ const LibraryPage = () => {
               <option value="main">Основное</option>
               <option value="side">Гарнир</option>
               <option value="salad">Салат</option>
+              <option value="soup">Суп</option>
               <option value="snack">Перекус</option>
               <option value="dessert">Десерт</option>
               <option value="drink">Напиток</option>

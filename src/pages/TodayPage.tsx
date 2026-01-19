@@ -208,9 +208,9 @@ const TodayPage = () => {
   const nutritionTargets = dayPlan?.nutritionTargets ?? {};
   const drinkLogs = data.logs.drinks.filter(log => log.dateTime.slice(0, 10) === selectedDate);
   const sleepLogs = data.logs.sleep.filter(log => log.date === selectedDate);
-  const plannedMealsCount = dayPlan
+  const plannedMealsCount = dayPlan?.mealsPlan
     ? (Object.keys(mealLabels) as FoodEntry['meal'][]).filter(
-        meal => dayPlan.mealsPlan[meal].length > 0 || Boolean(dayPlan.mealTimes?.[meal])
+        meal => dayPlan.mealsPlan[meal]?.length > 0 || Boolean(dayPlan.mealTimes?.[meal])
       ).length
     : 0;
   const selectedProduct = data.library.products.find(product => product.id === foodForm.refId);
