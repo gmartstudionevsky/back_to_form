@@ -503,6 +503,7 @@ const PlanPage = () => {
     const mainRecipes = data.library.recipes.filter(item => item.category === 'main');
     const sideRecipes = data.library.recipes.filter(item => item.category === 'side');
     const saladRecipes = data.library.recipes.filter(item => item.category === 'salad');
+    const soupRecipes = data.library.recipes.filter(item => item.category === 'soup');
     const snackRecipes = data.library.recipes.filter(
       item => item.category === 'snack' || item.category === 'dessert'
     );
@@ -513,6 +514,8 @@ const PlanPage = () => {
 
     const pick = <T,>(list: T[], index: number, fallback: T) =>
       list.length ? list[index % list.length] : fallback;
+    const pickOptional = <T,>(list: T[], index: number) =>
+      list.length ? list[index % list.length] : null;
 
     updateData(state => {
       dayList.forEach((date, index) => {
@@ -520,84 +523,155 @@ const PlanPage = () => {
         const breakfastRecipe =
           breakfastRecipes.length > 0 ? pick(breakfastRecipes, index, breakfastRecipes[0]) : null;
         const mainRecipe = pick(mainRecipes, index, mainRecipes[0] ?? breakfastRecipes[0]);
-        const sideRecipe = pick(sideRecipes, index, sideRecipes[0] ?? breakfastRecipes[0]);
-        const saladRecipe = pick(saladRecipes, index, saladRecipes[0] ?? breakfastRecipes[0]);
+        const sideRecipe = pickOptional(sideRecipes, index);
+        const saladRecipe = pickOptional(saladRecipes, index);
+        const soupRecipe = pickOptional(soupRecipes, index);
         const snackRecipe = snackRecipes.length
           ? pick(snackRecipes, index, snackRecipes[0])
           : null;
-        const drinkRecipe = drinkRecipes.length
-          ? pick(drinkRecipes, index, drinkRecipes[0])
-          : null;
+        const drinkRecipe = pickOptional(drinkRecipes, index);
+        const lunchGreensRecipe =
+          saladRecipe && soupRecipe
+            ? index % 2 === 0
+              ? soupRecipe
+              : saladRecipe
+            : soupRecipe ?? saladRecipe;
         const snackProduct = productSnacks.length
           ? pick(productSnacks, index, productSnacks[0])
           : state.library.products[0];
 
-        plan.mealsPlan = {
-          breakfast: breakfastRecipe
+        const breakfastItems = breakfastRecipe
+          ? [
+              {
+                id: crypto.randomUUID(),
+                kind: 'dish' as const,
+                refId: breakfastRecipe.id,
+                plannedServings: 1,
+                plannedTime: '08:30',
+                notes: 'Авто-меню: лёгкий старт'
+              }
+            ]
+          : [];
+        if (drinkRecipe && breakfastRecipe) {
+          breakfastItems.push({
+            id: crypto.randomUUID(),
+            kind: 'dish',
+            refId: drinkRecipe.id,
+            plannedServings: 1
+          });
+        }
+
+        const lunchItems = [
+          {
+            id: crypto.randomUUID(),
+            kind: 'dish' as const,
+            refId: mainRecipe?.id,
+            plannedServings: 1,
+            plannedTime: '13:30'
+          },
+          ...(sideRecipe
             ? [
                 {
                   id: crypto.randomUUID(),
-                  kind: 'dish',
-                  refId: breakfastRecipe.id,
-                  plannedServings: 1,
-                  plannedTime: '08:30',
-                  notes: 'Авто-меню: лёгкий старт'
+                  kind: 'dish' as const,
+                  refId: sideRecipe.id,
+                  plannedServings: 1
                 }
               ]
-            : [],
-          lunch: [
-            {
-              id: crypto.randomUUID(),
-              kind: 'dish',
-              refId: mainRecipe?.id,
-              plannedServings: 1,
-              plannedTime: '13:30'
-            },
-            {
-              id: crypto.randomUUID(),
-              kind: 'dish',
-              refId: sideRecipe?.id,
-              plannedServings: 1
-            },
-            {
-              id: crypto.randomUUID(),
-              kind: 'dish',
-              refId: saladRecipe?.id,
-              plannedServings: 1
-            }
-          ],
-          dinner: [
-            {
-              id: crypto.randomUUID(),
-              kind: 'dish',
-              refId: mainRecipe?.id,
-              plannedServings: 1,
-              plannedTime: '19:00'
-            },
-            {
-              id: crypto.randomUUID(),
-              kind: 'dish',
-              refId: sideRecipe?.id,
-              plannedServings: 1
-            }
-          ],
-          snack: [
-            snackRecipe
-              ? {
+            : []),
+          ...(lunchGreensRecipe
+            ? [
+                {
                   id: crypto.randomUUID(),
-                  kind: 'dish',
-                  refId: snackRecipe.id,
-                  plannedServings: 1,
-                  plannedTime: '16:30'
+                  kind: 'dish' as const,
+                  refId: lunchGreensRecipe.id,
+                  plannedServings: 1
                 }
-              : {
+              ]
+            : []),
+          ...(drinkRecipe
+            ? [
+                {
                   id: crypto.randomUUID(),
-                  kind: 'product',
-                  refId: snackProduct?.id,
-                  plannedGrams: snackProduct?.portionPresets?.[0]?.grams ?? 120,
-                  plannedTime: '16:30'
+                  kind: 'dish' as const,
+                  refId: drinkRecipe.id,
+                  plannedServings: 1
                 }
-          ]
+              ]
+            : [])
+        ];
+
+        const dinnerItems = [
+          {
+            id: crypto.randomUUID(),
+            kind: 'dish' as const,
+            refId: mainRecipe?.id,
+            plannedServings: 1,
+            plannedTime: '19:00'
+          },
+          ...(sideRecipe
+            ? [
+                {
+                  id: crypto.randomUUID(),
+                  kind: 'dish' as const,
+                  refId: sideRecipe.id,
+                  plannedServings: 1
+                }
+              ]
+            : []),
+          ...(saladRecipe
+            ? [
+                {
+                  id: crypto.randomUUID(),
+                  kind: 'dish' as const,
+                  refId: saladRecipe.id,
+                  plannedServings: 1
+                }
+              ]
+            : []),
+          ...(drinkRecipe
+            ? [
+                {
+                  id: crypto.randomUUID(),
+                  kind: 'dish' as const,
+                  refId: drinkRecipe.id,
+                  plannedServings: 1
+                }
+              ]
+            : [])
+        ];
+
+        const snackItems = [
+          snackRecipe
+            ? {
+                id: crypto.randomUUID(),
+                kind: 'dish' as const,
+                refId: snackRecipe.id,
+                plannedServings: 1,
+                plannedTime: '16:30'
+              }
+            : {
+                id: crypto.randomUUID(),
+                kind: 'product' as const,
+                refId: snackProduct?.id,
+                plannedGrams: snackProduct?.portionPresets?.[0]?.grams ?? 120,
+                plannedTime: '16:30'
+              }
+        ];
+        if (drinkRecipe) {
+          snackItems.push({
+            id: crypto.randomUUID(),
+            kind: 'dish',
+            refId: drinkRecipe.id,
+            plannedServings: 1
+          });
+        }
+
+        plan.mealsPlan = {
+          breakfast: breakfastItems,
+          lunch: lunchItems,
+          dinner: dinnerItems,
+          snack: snackItems
         };
 
         if (index % 5 === 4) {
@@ -621,10 +695,20 @@ const PlanPage = () => {
                 {
                   id: crypto.randomUUID(),
                   type: 'main',
-                  recipeRef: breakfastRecipe?.id,
+                  recipeRef: breakfastRecipe.id,
                   portion: '1 порция',
                   notes: 'Фокус на белок'
-                }
+                },
+                ...(drinkRecipe
+                  ? [
+                      {
+                        id: crypto.randomUUID(),
+                        type: 'drink',
+                        recipeRef: drinkRecipe.id,
+                        portion: '250 мл'
+                      }
+                    ]
+                  : [])
               ]
             : [],
           lunch: [
@@ -634,19 +718,37 @@ const PlanPage = () => {
               recipeRef: mainRecipe?.id,
               portion: '1 порция'
             },
-            {
-              id: crypto.randomUUID(),
-              type: 'side',
-              recipeRef: sideRecipe?.id,
-              portion: '1 порция'
-            },
-            {
-              id: crypto.randomUUID(),
-              type: 'salad',
-              recipeRef: saladRecipe?.id,
-              portion: '1 порция',
-              extra: true
-            }
+            ...(sideRecipe
+              ? [
+                  {
+                    id: crypto.randomUUID(),
+                    type: 'side',
+                    recipeRef: sideRecipe.id,
+                    portion: '1 порция'
+                  }
+                ]
+              : []),
+            ...(lunchGreensRecipe
+              ? [
+                  {
+                    id: crypto.randomUUID(),
+                    type: lunchGreensRecipe.category === 'soup' ? 'soup' : 'salad',
+                    recipeRef: lunchGreensRecipe.id,
+                    portion: '1 порция',
+                    extra: true
+                  }
+                ]
+              : []),
+            ...(drinkRecipe
+              ? [
+                  {
+                    id: crypto.randomUUID(),
+                    type: 'drink',
+                    recipeRef: drinkRecipe.id,
+                    portion: '250 мл'
+                  }
+                ]
+              : [])
           ],
           dinner: [
             {
@@ -655,27 +757,60 @@ const PlanPage = () => {
               recipeRef: mainRecipe?.id,
               portion: '1 порция'
             },
+            ...(sideRecipe
+              ? [
+                  {
+                    id: crypto.randomUUID(),
+                    type: 'side',
+                    recipeRef: sideRecipe.id,
+                    portion: '1 порция'
+                  }
+                ]
+              : []),
+            ...(saladRecipe
+              ? [
+                  {
+                    id: crypto.randomUUID(),
+                    type: 'salad',
+                    recipeRef: saladRecipe.id,
+                    portion: '1 порция',
+                    extra: true
+                  }
+                ]
+              : []),
             ...(drinkRecipe
               ? [
                   {
                     id: crypto.randomUUID(),
                     type: 'drink',
-                    recipeRef: drinkRecipe?.id,
+                    recipeRef: drinkRecipe.id,
                     portion: '250 мл'
                   }
                 ]
               : [])
           ],
-          snack: snackRecipe
-            ? [
-                {
-                  id: crypto.randomUUID(),
-                  type: 'dessert',
-                  recipeRef: snackRecipe.id,
-                  portion: '1 порция'
-                }
-              ]
-            : []
+          snack: [
+            ...(snackRecipe
+              ? [
+                  {
+                    id: crypto.randomUUID(),
+                    type: 'dessert',
+                    recipeRef: snackRecipe.id,
+                    portion: '1 порция'
+                  }
+                ]
+              : []),
+            ...(drinkRecipe
+              ? [
+                  {
+                    id: crypto.randomUUID(),
+                    type: 'drink',
+                    recipeRef: drinkRecipe.id,
+                    portion: '250 мл'
+                  }
+                ]
+              : [])
+          ]
         };
 
         plan.mealTimes = {
