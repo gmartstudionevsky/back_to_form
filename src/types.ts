@@ -434,3 +434,64 @@ export type AppData = {
     dishPortions: { label: string; servings: number }[];
   };
 };
+
+export type ProfileGoalKind =
+  | 'lose_weight'
+  | 'gain_muscle'
+  | 'maintain'
+  | 'endurance'
+  | 'health'
+  | 'custom';
+
+export type ProfileGoalHorizon = 'short' | 'long';
+
+export type ProfileGoal = {
+  id: UUID;
+  title: string;
+  kind: ProfileGoalKind;
+  horizon: ProfileGoalHorizon;
+  notes?: string;
+};
+
+export type ProfileMetrics = {
+  gender?: 'male' | 'female' | 'other';
+  age?: number;
+  heightCm?: number;
+  weightKg?: number;
+  bodyFatPercent?: number;
+  muscleMassKg?: number;
+};
+
+export type ProfileCurrentState = {
+  fitnessLevel?: number;
+  readinessNote?: string;
+  updatedAt?: string;
+  autoLevel?: number;
+  autoSummary?: string;
+  autoUpdatedAt?: string;
+};
+
+export type ProfileAccess = {
+  activity: string[];
+  homeEquipment: string[];
+  gymEquipment: string[];
+  customEquipment: string[];
+};
+
+export type UserProfile = {
+  id: UUID;
+  login: string;
+  password: string;
+  name?: string;
+  metrics: ProfileMetrics;
+  readinessLevel?: 'beginner' | 'intermediate' | 'advanced';
+  currentState: ProfileCurrentState;
+  goals: {
+    longTerm: ProfileGoal[];
+    shortTerm: ProfileGoal[];
+  };
+  access: ProfileAccess;
+  setupCompleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+};

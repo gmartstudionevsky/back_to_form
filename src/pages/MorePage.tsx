@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 
 const MorePage = () => {
   const links = [
+    { path: '/profile', label: 'Профайл' },
     { path: '/library', label: 'Библиотеки' },
     { path: '/progress', label: 'Прогресс' },
     { path: '/photos', label: 'Фото' },

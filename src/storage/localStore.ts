@@ -1,12 +1,19 @@
 import { AppData, MovementActivity } from '../types';
 import { seedData, schemaVersion } from '../data/seed';
+import { getActiveProfileId } from './profileStorage';
 import { logger } from '../utils/logger';
 import { inferCookingType } from '../utils/nutrition';
 
 const STORAGE_KEY = 'btf-data';
 
-const buildLoadMeta = (payload?: string, version?: number) => ({
-  storageKey: STORAGE_KEY,
+const buildProfileStorageKey = (profileId?: string) =>
+  profileId ? `${STORAGE_KEY}-${profileId}` : STORAGE_KEY;
+
+const resolveStorageKey = (profileId?: string) =>
+  buildProfileStorageKey(profileId ?? getActiveProfileId());
+
+const buildLoadMeta = (storageKey: string, payload?: string, version?: number) => ({
+  storageKey,
   payloadBytes: payload ? payload.length : 0,
   schemaVersion: version ?? schemaVersion
 });
@@ -63,17 +70,21 @@ const mergeMovementActivities = (
   return [...mergedUser, ...additions];
 };
 
-export const loadData = (): AppData => {
+export const loadData = (profileId?: string): AppData => {
+  const storageKey = resolveStorageKey(profileId);
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) {
-      logger.info('Storage: no cached data, using seed', buildLoadMeta());
+      logger.info('Storage: no cached data, using seed', buildLoadMeta(storageKey));
       return seedData;
     }
     const parsed = JSON.parse(raw) as AppData;
     // When schema changes, we keep user data and progressively fill new fields.
     if (!parsed.schemaVersion || parsed.schemaVersion !== schemaVersion) {
-      logger.info('Storage: schema mismatch, migrating data', buildLoadMeta(raw, parsed.schemaVersion));
+      logger.info(
+        'Storage: schema mismatch, migrating data',
+        buildLoadMeta(storageKey, raw, parsed.schemaVersion)
+      );
       const migrated: AppData = { ...seedData, ...parsed, schemaVersion };
       if (!parsed.schemaVersion || parsed.schemaVersion < 2) {
         migrated.logs.foodDays = (parsed.logs?.foodDays ?? []).map(day => ({
@@ -523,22 +534,24 @@ export const loadData = (): AppData => {
 
       return migrated;
     }
-    logger.info('Storage: loaded cached data', buildLoadMeta(raw, parsed.schemaVersion));
+    logger.info('Storage: loaded cached data', buildLoadMeta(storageKey, raw, parsed.schemaVersion));
     return parsed;
   } catch {
-    logger.warn('Storage: failed to parse cached data, resetting', buildLoadMeta());
-    safeRemoveItem(STORAGE_KEY);
-    safeSetItem(STORAGE_KEY, JSON.stringify(seedData));
+    logger.warn('Storage: failed to parse cached data, resetting', buildLoadMeta(storageKey));
+    safeRemoveItem(storageKey);
+    safeSetItem(storageKey, JSON.stringify(seedData));
     return seedData;
   }
 };
 
-export const saveData = (data: AppData) => {
-  safeSetItem(STORAGE_KEY, JSON.stringify(data));
-  logger.info('Storage: data saved', buildLoadMeta(undefined, data.schemaVersion));
+export const saveData = (data: AppData, profileId?: string) => {
+  const storageKey = resolveStorageKey(profileId);
+  safeSetItem(storageKey, JSON.stringify(data));
+  logger.info('Storage: data saved', buildLoadMeta(storageKey, undefined, data.schemaVersion));
 };
 
-export const resetData = () => {
-  safeSetItem(STORAGE_KEY, JSON.stringify(seedData));
-  logger.info('Storage: data reset to seed', buildLoadMeta());
+export const resetData = (profileId?: string) => {
+  const storageKey = resolveStorageKey(profileId);
+  safeSetItem(storageKey, JSON.stringify(seedData));
+  logger.info('Storage: data reset to seed', buildLoadMeta(storageKey));
 };

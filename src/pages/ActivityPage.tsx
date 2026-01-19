@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../store/useAppStore';
+import { useProfileStore } from '../store/useProfileStore';
 import { combineDateTime, currentTimeString, todayISO } from '../utils/date';
 import {
   calcMovementActivityMetrics,
@@ -11,6 +12,9 @@ import {
 import type { ActivityLog, MovementSessionLog } from '../types';
 
 const ActivityPage = () => {
+  const activeProfile = useProfileStore(state =>
+    state.profiles.find(profile => profile.id === state.activeProfileId)
+  );
   const {
     data,
     addTrainingLog,
@@ -55,10 +59,13 @@ const ActivityPage = () => {
       .sort((a, b) => a.dateTime.localeCompare(b.dateTime))
       .slice(-1)[0]?.weightKg;
 
+  const profileMetrics = activeProfile?.metrics ?? {};
   const activityContext = {
-    weightKg: resolveWeightForDateTime(`${selectedDate}T23:59:00.000Z`),
+    weightKg: resolveWeightForDateTime(`${selectedDate}T23:59:00.000Z`) ?? profileMetrics.weightKg,
     intakeKcal: 0,
-    activityCoefficient: 0
+    activityCoefficient: 0,
+    bodyFatPercent: profileMetrics.bodyFatPercent,
+    muscleMassKg: profileMetrics.muscleMassKg
   };
 
   const trainingStats = useMemo(() => {
