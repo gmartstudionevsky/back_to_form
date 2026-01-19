@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BottomSheet } from '../components/BottomSheet';
 import { useAppStore } from '../store/useAppStore';
+import { useProfileStore } from '../store/useProfileStore';
 import {
   DayPlan,
   FoodEntry,
@@ -16,6 +17,7 @@ import {
 } from '../types';
 import { calcMealPlanItem, resolveProductGrams } from '../utils/nutrition';
 import { todayISO } from '../utils/date';
+import { buildGoalSignals, goalKindLabels } from '../utils/goals';
 import {
   getDefaultMealTime,
   getDefaultTimeForTimeOfDay,
@@ -90,6 +92,9 @@ const nutritionTagLabels: Record<NutritionTag, string> = {
 
 const PlanPage = () => {
   const { data, updateData, createOrGetDayPlan } = useAppStore();
+  const activeProfile = useProfileStore(state =>
+    state.profiles.find(profile => profile.id === state.activeProfileId)
+  );
   const [activeTab, setActiveTab] = useState<Tab>('Обзор');
   const [name, setName] = useState('Новый период');
   const [startDate, setStartDate] = useState('');
@@ -211,13 +216,18 @@ const PlanPage = () => {
 
   const addPeriod = () => {
     if (!canAddPeriod) return;
+    const profileGoals =
+      activeProfile?.goals.shortTerm?.length
+        ? activeProfile.goals.shortTerm
+        : activeProfile?.goals.longTerm ?? [];
+    const seededGoals = profileGoals.map(goal => goal.title).slice(0, 4);
     updateData(state => {
       const period: Period = {
         id: crypto.randomUUID(),
         name,
         startDate,
         endDate,
-        goals: [],
+        goals: seededGoals,
         notes: ''
       };
       return { ...state, planner: { ...state.planner, periods: [...state.planner.periods, period] } };
@@ -226,6 +236,16 @@ const PlanPage = () => {
     setStartDate('');
     setEndDate('');
   };
+
+  const profileGoalSuggestions = useMemo(() => {
+    if (!activeProfile) return [];
+    const goals = [...activeProfile.goals.shortTerm, ...activeProfile.goals.longTerm];
+    return goals.map(goal => ({
+      id: goal.id,
+      label: `${goalKindLabels[goal.kind]} · ${goal.title}`,
+      value: goal.title
+    }));
+  }, [activeProfile]);
 
   const dayList = useMemo(() => {
     if (!selectedPeriod) return [] as string[];
@@ -329,9 +349,31 @@ const PlanPage = () => {
     setPeriodGoalInput('');
   };
 
+  const addSuggestedGoal = (goal: string) => {
+    if (!selectedPeriod) return;
+    const trimmed = goal.trim();
+    if (!trimmed) return;
+    const nextGoals = Array.from(new Set([...selectedPeriod.goals, trimmed]));
+    updateSelectedPeriod({ goals: nextGoals });
+  };
+
   const removeGoalFromPeriod = (goal: string) => {
     if (!selectedPeriod) return;
     updateSelectedPeriod({ goals: selectedPeriod.goals.filter(item => item !== goal) });
+  };
+
+  const calcBaseKcal = (
+    weightKg: number,
+    heightCm?: number,
+    age?: number,
+    gender?: string
+  ) => {
+    if (heightCm && age && gender) {
+      const base = 10 * weightKg + 6.25 * heightCm - 5 * age;
+      const genderOffset = gender === 'male' ? 5 : -161;
+      return Math.round((base + genderOffset) * 1.4);
+    }
+    return Math.round(weightKg * 30);
   };
 
   const ensureDayPlan = (state: typeof data, date: string) => {
@@ -419,7 +461,13 @@ const PlanPage = () => {
 
   const autoPlanPeriod = () => {
     if (!selectedPeriod) return;
-    const goalsText = selectedPeriod.goals.join(' ').toLowerCase();
+    const profileGoals =
+      activeProfile?.goals.shortTerm?.length
+        ? activeProfile.goals.shortTerm
+        : activeProfile?.goals.longTerm ?? [];
+    const goalsText = [...selectedPeriod.goals, ...profileGoals.map(goal => goal.title)]
+      .join(' ')
+      .toLowerCase();
     const latestWeight = data.logs.weight.reduce((latest, log) => {
       if (!latest) return log;
       return log.dateTime > latest.dateTime ? log : latest;
@@ -437,17 +485,19 @@ const PlanPage = () => {
       return log.dateTime > latest.dateTime ? log : latest;
     }, undefined as typeof data.logs.smoking[number] | undefined);
 
-    const weightKg = latestWeight?.weightKg ?? 65;
-    const baseKcal = Math.round(weightKg * 30);
-    const goalMultiplier = goalsText.includes('набор')
-      ? 1.1
-      : goalsText.includes('снижен') || goalsText.includes('сброс') || goalsText.includes('минус')
-        ? 0.9
-        : 1;
-    const kcalTarget = Math.round(baseKcal * goalMultiplier);
-    const stepsTarget = goalsText.includes('актив') ? 10000 : 8000;
-    const movementMinutes = goalsText.includes('движ') ? 30 : 20;
-    const trainingMinutes = goalsText.includes('сил') ? 35 : 25;
+    const profileWeight = activeProfile?.metrics?.weightKg;
+    const weightKg = latestWeight?.weightKg ?? profileWeight ?? 65;
+    const baseKcal = calcBaseKcal(
+      weightKg,
+      activeProfile?.metrics?.heightCm,
+      activeProfile?.metrics?.age,
+      activeProfile?.metrics?.gender
+    );
+    const goalSignals = buildGoalSignals(profileGoals, selectedPeriod.goals);
+    const kcalTarget = Math.round(baseKcal * goalSignals.kcalMultiplier);
+    const stepsTarget = goalSignals.stepsTarget;
+    const movementMinutes = goalSignals.movementMinutes;
+    const trainingMinutes = goalSignals.trainingMinutes;
 
     const breakfastRecipes = data.library.recipes.filter(item => item.category === 'breakfast');
     const mainRecipes = data.library.recipes.filter(item => item.category === 'main');
@@ -636,9 +686,9 @@ const PlanPage = () => {
         };
         plan.nutritionTargets = {
           kcal: kcalTarget,
-          protein: Math.round(weightKg * 1.8),
-          fat: Math.round((kcalTarget * 0.25) / 9),
-          carb: Math.round((kcalTarget * 0.45) / 4),
+          protein: Math.round(weightKg * 1.8 * goalSignals.proteinMultiplier),
+          fat: Math.round((kcalTarget * goalSignals.fatRatio) / 9),
+          carb: Math.round((kcalTarget * goalSignals.carbRatio) / 4),
           meals: 4
         };
         plan.activityTargets = {
@@ -1215,6 +1265,25 @@ const PlanPage = () => {
                     </span>
                   ))}
                 </div>
+                {profileGoalSuggestions.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase text-slate-400">
+                      Подсказки профайла
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {profileGoalSuggestions.map(goal => (
+                        <button
+                          key={goal.id}
+                          className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-500 hover:border-slate-300 hover:text-slate-700"
+                          type="button"
+                          onClick={() => addSuggestedGoal(goal.value)}
+                        >
+                          {goal.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <input
                     className="input flex-1"

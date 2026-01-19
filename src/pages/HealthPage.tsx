@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../store/useAppStore';
+import { useProfileStore } from '../store/useProfileStore';
 import { combineDateTime, currentTimeString, todayISO } from '../utils/date';
 import { resolveProductGrams } from '../utils/nutrition';
 import type { SmokingLog, SleepLog, WaistLog, WeightLog } from '../types';
 
 const HealthPage = () => {
+  const activeProfile = useProfileStore(state =>
+    state.profiles.find(profile => profile.id === state.activeProfileId)
+  );
   const {
     data,
     addSmokingLog,
@@ -95,7 +99,9 @@ const HealthPage = () => {
     return sum;
   }, 0);
   const hydrationEquivalent = drinkHydrationMl + foodHydrationMl;
-  const hydrationTarget = weightLog?.weightKg ? weightLog.weightKg * 30 : undefined;
+  const profileWeight = activeProfile?.metrics?.weightKg;
+  const hydrationTarget =
+    weightLog?.weightKg ?? profileWeight ? (weightLog?.weightKg ?? profileWeight ?? 0) * 30 : undefined;
 
   const parseTimeToMinutes = (time?: string) => {
     if (!time) return null;

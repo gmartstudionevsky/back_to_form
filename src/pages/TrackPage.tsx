@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { BottomSheet } from '../components/BottomSheet';
 import { useAppStore } from '../store/useAppStore';
+import { useProfileStore } from '../store/useProfileStore';
 import { calcFoodEntry, calcMealPlanItem, resolveProductGrams } from '../utils/nutrition';
 import { combineDateTime, currentTimeString, todayISO } from '../utils/date';
 import { getTimeOfDayFromDateTime, timeOfDayLabels } from '../utils/timeOfDay';
@@ -50,6 +51,9 @@ const nutritionTagLabels: Record<NutritionTag, string> = {
 };
 
 const TrackPage = () => {
+  const activeProfile = useProfileStore(state =>
+    state.profiles.find(profile => profile.id === state.activeProfileId)
+  );
   const {
     data,
     addFoodEntry,
@@ -276,19 +280,23 @@ const TrackPage = () => {
     .filter(log => log.dateTime.slice(0, 10) <= selectedDate)
     .sort((a, b) => a.dateTime.localeCompare(b.dateTime))
     .slice(-1)[0]?.weightKg;
+  const profileMetrics = activeProfile?.metrics ?? {};
   const hydrationBasePerKg = 30;
   const hydrationActivityBonus = 400;
   const hydrationTargetMl =
-    hydrationWeight !== undefined
-      ? hydrationWeight * hydrationBasePerKg + activityCoefficient * hydrationActivityBonus
+    hydrationWeight ?? profileMetrics.weightKg
+      ? (hydrationWeight ?? profileMetrics.weightKg ?? 0) * hydrationBasePerKg +
+        activityCoefficient * hydrationActivityBonus
       : undefined;
   const hydrationCoefficient = hydrationTargetMl ? hydrationEquivalent / hydrationTargetMl : 0;
   const defaultMovementActivityId = data.library.movementActivities[0]?.id ?? '';
 
   const activityContext = {
-    weightKg: resolveWeightForDateTime(toDateTime(selectedDate)),
+    weightKg: resolveWeightForDateTime(toDateTime(selectedDate)) ?? profileMetrics.weightKg,
     intakeKcal: totals.kcal,
-    activityCoefficient
+    activityCoefficient,
+    bodyFatPercent: profileMetrics.bodyFatPercent,
+    muscleMassKg: profileMetrics.muscleMassKg
   };
 
   const estimateTraining = (log: {
@@ -1044,7 +1052,8 @@ const TrackPage = () => {
             </p>
             <p className="text-xs text-slate-500">
               Напитки: {drinkTotalMl.toFixed(0)} мл · Еда: {foodHydrationMl.toFixed(0)} мл · Вес:{' '}
-              {hydrationWeight ?? '—'} кг · Активность: {activityCoefficient.toFixed(2)}
+              {hydrationWeight ?? profileMetrics.weightKg ?? '—'} кг · Активность:{' '}
+              {activityCoefficient.toFixed(2)}
             </p>
             <p className={`text-xs ${getHydrationStatus(hydrationEquivalent, hydrationTargetMl).tone}`}>
               {getHydrationStatus(hydrationEquivalent, hydrationTargetMl).label}

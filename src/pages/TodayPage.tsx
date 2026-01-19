@@ -3,6 +3,7 @@ import { BottomSheet } from '../components/BottomSheet';
 import { WorkoutRunner } from '../components/WorkoutRunner';
 import { savePhotoBlob } from '../storage/photoDb';
 import { useAppStore } from '../store/useAppStore';
+import { useProfileStore } from '../store/useProfileStore';
 import { combineDateTime, currentTimeString, formatDate, todayISO } from '../utils/date';
 import {
   calcFoodEntry,
@@ -37,6 +38,8 @@ import {
   getTimeOfDayFromTime,
   timeOfDayLabels
 } from '../utils/timeOfDay';
+import { buildGoalSuggestions, goalKindLabels } from '../utils/goals';
+import { buildStateSuggestions, calcCurrentStateSnapshot } from '../utils/currentState';
 
 const mealLabels: Record<FoodEntry['meal'], string> = {
   breakfast: 'Завтрак',
@@ -85,6 +88,10 @@ const mealComponentPortions: Record<MealComponentType, string[]> = {
 
 const TodayPage = () => {
   const navigate = useNavigate();
+  const activeProfile = useProfileStore(state =>
+    state.profiles.find(profile => profile.id === state.activeProfileId)
+  );
+  const replaceProfile = useProfileStore(state => state.replaceProfile);
   const {
     data,
     addFoodEntry,
@@ -415,8 +422,9 @@ const TodayPage = () => {
   const hydrationBasePerKg = 30;
   const hydrationActivityBonus = 400;
   const hydrationTargetMl =
-    hydrationWeight !== undefined
-      ? hydrationWeight * hydrationBasePerKg + activityCoefficient * hydrationActivityBonus
+    hydrationWeight ?? profileMetrics.weightKg
+      ? (hydrationWeight ?? profileMetrics.weightKg ?? 0) * hydrationBasePerKg +
+        activityCoefficient * hydrationActivityBonus
       : undefined;
   const hydrationCoefficient = hydrationTargetMl ? hydrationEquivalent / hydrationTargetMl : 0;
   const hydrationProgress = getProgressStatus(hydrationEquivalent, hydrationTargetMl);
@@ -431,6 +439,7 @@ const TodayPage = () => {
     setSelectedDate(date.toISOString().slice(0, 10));
   };
 
+  const profileMetrics = activeProfile?.metrics ?? {};
   const resolveWeightForDateTime = (dateTime: string) =>
     data.logs.weight
       .filter(log => log.dateTime <= dateTime)
@@ -483,9 +492,11 @@ const TodayPage = () => {
   const toDateTime = (date: string, time?: string) => combineDateTime(date, time);
 
   const activityContext = {
-    weightKg: resolveWeightForDateTime(toDateTime(selectedDate)),
+    weightKg: resolveWeightForDateTime(toDateTime(selectedDate)) ?? profileMetrics.weightKg,
     intakeKcal: totals.kcal,
-    activityCoefficient
+    activityCoefficient,
+    bodyFatPercent: profileMetrics.bodyFatPercent,
+    muscleMassKg: profileMetrics.muscleMassKg
   };
 
   const estimateTraining = (log: {
@@ -505,7 +516,7 @@ const TodayPage = () => {
     const activity = data.library.movementActivities.find(item => item.id === log.activityRef);
     return calcMovementActivityMetrics(log, activity, activityDefaults, {
       ...activityContext,
-      weightKg: resolveWeightForDateTime(log.dateTime)
+      weightKg: resolveWeightForDateTime(log.dateTime) ?? profileMetrics.weightKg
     }).calories;
   };
 
@@ -1231,6 +1242,40 @@ const TodayPage = () => {
   const progressPercent = plannedItemsCount
     ? Math.round((completedItemsCount / plannedItemsCount) * 100)
     : 0;
+  const longTermGoals = activeProfile?.goals.longTerm ?? [];
+  const shortTermGoals = activeProfile?.goals.shortTerm ?? [];
+  const currentStateSnapshot = useMemo(
+    () => calcCurrentStateSnapshot(data.logs, selectedDate),
+    [data.logs, selectedDate]
+  );
+  const dayGoalSuggestions = buildGoalSuggestions(
+    shortTermGoals.length ? shortTermGoals : longTermGoals
+  );
+  const stateSuggestions = buildStateSuggestions(currentStateSnapshot);
+  const dailySuggestions = Array.from(new Set([...dayGoalSuggestions, ...stateSuggestions])).slice(
+    0,
+    6
+  );
+
+  useEffect(() => {
+    if (!activeProfile || !currentStateSnapshot) return;
+    const current = activeProfile.currentState ?? {};
+    if (
+      current.autoLevel === currentStateSnapshot.autoLevel &&
+      current.autoSummary === currentStateSnapshot.summary
+    ) {
+      return;
+    }
+    replaceProfile({
+      ...activeProfile,
+      currentState: {
+        ...current,
+        autoLevel: currentStateSnapshot.autoLevel,
+        autoSummary: currentStateSnapshot.summary,
+        autoUpdatedAt: new Date().toISOString()
+      }
+    });
+  }, [activeProfile, currentStateSnapshot, replaceProfile]);
 
   return (
     <section className="space-y-4">
@@ -1296,6 +1341,76 @@ const TodayPage = () => {
           </div>
         </div>
       </header>
+
+      <div className="card space-y-3 p-4" id="goals">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="section-title">Цели</h2>
+            <p className="text-xs text-slate-500">
+              Долгосрочные и краткосрочные ориентиры из профайла.
+            </p>
+            {currentStateSnapshot ? (
+              <p className="text-xs text-slate-400">
+                Текущее состояние: {currentStateSnapshot.autoLevel}/5 ·{' '}
+                {currentStateSnapshot.summary}
+              </p>
+            ) : (
+              <p className="text-xs text-slate-400">Текущее состояние: недостаточно данных.</p>
+            )}
+          </div>
+          <button
+            className="btn-secondary w-full sm:w-auto"
+            onClick={() => navigate('/profile')}
+          >
+            Редактировать профайл
+          </button>
+        </div>
+        {shortTermGoals.length === 0 && longTermGoals.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            Пока нет целей. Добавьте их в профайле, чтобы получить персональные рекомендации.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase text-slate-400">Краткосрочные</p>
+              <div className="flex flex-wrap gap-2">
+                {shortTermGoals.map(goal => (
+                  <span key={goal.id} className="badge">
+                    {goalKindLabels[goal.kind]} · {goal.title}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase text-slate-400">Долгосрочные</p>
+              <div className="flex flex-wrap gap-2">
+                {longTermGoals.map(goal => (
+                  <span key={goal.id} className="badge">
+                    {goalKindLabels[goal.kind]} · {goal.title}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+        <div className="rounded-2xl border border-dashed border-slate-200 p-3">
+          <p className="text-xs font-semibold uppercase text-slate-400">Цели дня</p>
+          {dailySuggestions.length > 0 ? (
+            <ul className="mt-2 space-y-1 text-sm text-slate-600">
+              {dailySuggestions.map(item => (
+                <li key={item} className="flex items-start gap-2">
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-slate-400" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-sm text-slate-500">
+              Добавьте цели в профайле, чтобы получать подсказки на день.
+            </p>
+          )}
+        </div>
+      </div>
 
       <div className="card p-4" id="summary">
         <h2 className="section-title">Итоги дня</h2>
